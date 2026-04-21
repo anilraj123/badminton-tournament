@@ -517,6 +517,34 @@ export default function TvDashboard() {
           <ActiveComponent matches={matches} liveSlot={liveSlot} nextSlot={nextSlot} subIndex={subIndex} />
         )}
       </main>
+
+      {/* Tournament info strip — always visible at bottom */}
+      <footer className="shrink-0 border-t-2 border-slate-200 bg-white px-10 py-3 flex items-center gap-6">
+        <img src="/tournament-poster.jpg" alt="Tournament poster"
+             className="h-14 w-auto rounded shadow-sm" style={{ border: '1px solid #e2e8f0' }} />
+        <div className="flex-1 flex items-baseline gap-6 flex-wrap">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400">MTCSV Yuvajana Sakhyam</div>
+            <div className="text-lg font-black text-slate-900 leading-tight">
+              Badminton Tournament <span className="text-amber-600 italic font-serif font-normal text-base">"Serve for His Glory!"</span>
+            </div>
+          </div>
+          <div className="flex items-baseline gap-6 text-sm text-slate-600 ml-auto">
+            <div>
+              <span className="text-[10px] uppercase tracking-widest text-slate-400 mr-1">When</span>
+              <span className="font-bold text-slate-900">Sat · 4/25/2026 · 1–7 PM</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-widest text-slate-400 mr-1">Where</span>
+              <span className="font-bold text-slate-900">Kerala House, Fremont</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-widest text-slate-400 mr-1">Contact</span>
+              <span className="font-bold text-slate-900">Nishant George · 267-530-9577</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -709,10 +709,56 @@ export default function TournamentApp() {
         )}
       </main>
 
-      <footer className="border-t border-neutral-900 mt-12 py-6">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between text-[10px] text-neutral-600 uppercase tracking-widest">
-          <span>Per-match umpire PINs · Admin override available</span>
-          <span>Realtime · Supabase</span>
+      <footer className="border-t border-neutral-900 mt-12 py-8">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          {/* Tournament info block */}
+          <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 md:gap-8 items-start">
+            {/* Poster thumbnail */}
+            <a href="/tournament-poster.jpg" target="_blank" rel="noopener noreferrer"
+               className="block shrink-0 transition-opacity hover:opacity-80"
+               title="View full poster">
+              <img src="/tournament-poster.jpg" alt="MTCSV Yuvajana Sakhyam Badminton Tournament poster"
+                   className="w-full md:w-48 h-auto rounded" style={{ border: '1px solid #2a2a2a' }} />
+            </a>
+
+            {/* Info text */}
+            <div className="flex-1">
+              <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500 mb-2">
+                MTCSV Yuvajana Sakhyam Presents
+              </div>
+              <div className="text-xl md:text-2xl font-bold text-white mb-1">
+                Badminton Tournament
+              </div>
+              <div className="text-sm text-amber-300/80 italic mb-4 font-serif">
+                "Serve for His Glory!"
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-neutral-300">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">When</div>
+                  <div>Saturday, April 25, 2026 · 1 PM – 7 PM</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Where</div>
+                  <div>Kerala House · 40374 Fremont Blvd, Fremont, CA 94538</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Contact</div>
+                  <div>Nishant George · <a href="tel:+12675309577" className="text-white hover:text-amber-300 transition-colors">267-530-9577</a></div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Categories</div>
+                  <div>Men's/Women's Singles, Doubles, Mixed Doubles · Age 13+</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom strip */}
+          <div className="mt-8 pt-4 border-t border-neutral-900 flex items-center justify-between text-[10px] text-neutral-600 uppercase tracking-widest">
+            <span>Per-match umpire PINs · Admin override available</span>
+            <span>Realtime · Supabase</span>
+          </div>
         </div>
       </footer>
 
