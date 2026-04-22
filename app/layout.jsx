@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Badminton Tournament — Live',
-  description: 'Live scores, standings, and brackets',
+  title: 'MTCSV Open — Live',
+  description: 'Live scores, standings, and brackets · Serve for His Glory!',
 };
 
 export default function RootLayout({ children }) {

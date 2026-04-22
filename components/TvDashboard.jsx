@@ -496,7 +496,7 @@ export default function TvDashboard() {
       {/* Top bar */}
       <header className="flex items-center justify-between px-10 py-5 border-b-2 border-slate-200 bg-white">
         <div className="flex items-baseline gap-4">
-          <div className="font-black text-4xl tracking-tight text-slate-900">🏸 MATCH DAY</div>
+          <div className="font-black text-4xl tracking-tight text-slate-900">🏸 MTCSV OPEN</div>
           <div className="text-lg font-semibold text-slate-500">
             {now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>

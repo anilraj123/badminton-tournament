@@ -631,7 +631,7 @@ export default function TournamentApp() {
                 <span className="inline-block w-6 h-px bg-neutral-700"></span>
                 Badminton Tournament · Live
               </div>
-              <h1 className="font-display text-5xl md:text-7xl font-bold leading-none text-white">MATCH DAY</h1>
+              <h1 className="font-display text-5xl md:text-7xl font-bold leading-none text-white">MTCSV OPEN</h1>
               <div className="flex items-baseline gap-3 mt-2 font-mono text-xs text-neutral-500 flex-wrap">
                 <span>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
                 <span className="text-neutral-700">·</span>
