@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff } from 'lucide-react';
+import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff, Plus, Minus, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES } from '../lib/tournament-data';
 
@@ -250,98 +250,298 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
 
 // ---------- Score modal with PIN ----------
 const ScoreModal = ({ match, row, onSave, onClose }) => {
-  const [s1, setS1] = useState(row?.score1 ?? '');
-  const [s2, setS2] = useState(row?.score2 ?? '');
+  // Server-persisted score (what's in the DB right now)
+  const [serverS1, setServerS1] = useState(row?.score1 ?? null);
+  const [serverS2, setServerS2] = useState(row?.score2 ?? null);
+
+  // Local score (what the umpire is currently showing)
+  const [s1, setS1] = useState(row?.score1 ?? 0);
+  const [s2, setS2] = useState(row?.score2 ?? 0);
+
   const [pin, setPin] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [pinLocked, setPinLocked] = useState(false);
+  const [mode, setMode] = useState('live'); // 'live' | 'final'
   const [err, setErr] = useState(null);
+  const [syncState, setSyncState] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [finalS1, setFinalS1] = useState(row?.score1 ?? '');
+  const [finalS2, setFinalS2] = useState(row?.score2 ?? '');
+
   const c = CAT_COLORS[match.cat] || CAT_COLORS.MS;
 
-  // Remember last-used PIN per match (so umpire doesn't retype every time)
+  // Remember last-used PIN per match
   useEffect(() => {
     const saved = localStorage.getItem(`pin-${match.id}`);
-    if (saved) setPin(saved);
+    if (saved && saved.length === 4) {
+      setPin(saved);
+      setPinLocked(true);
+    }
   }, [match.id]);
 
-  const save = async () => {
+  // Pick up realtime changes from other devices while modal is open — but only
+  // reflect them to local state if the user hasn't diverged (rare race condition).
+  useEffect(() => {
+    if (row?.score1 !== serverS1 || row?.score2 !== serverS2) {
+      setServerS1(row?.score1 ?? null);
+      setServerS2(row?.score2 ?? null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row?.score1, row?.score2]);
+
+  // Unlock PIN: verify by attempting a no-op save (current score → current score)
+  const tryLockPin = async () => {
     setErr(null);
     if (pin.length !== 4) { setErr('Enter your 4-digit PIN'); return; }
-    const n1 = s1 === '' ? null : Number(s1);
-    const n2 = s2 === '' ? null : Number(s2);
-    if (n1 == null || n2 == null || Number.isNaN(n1) || Number.isNaN(n2)) { setErr('Enter both scores'); return; }
-    setSaving(true);
-    const result = await onSave(n1, n2, pin);
-    setSaving(false);
+    setSyncState('saving');
+    const result = await onSave(s1, s2, pin);
+    setSyncState('idle');
     if (result.ok) {
       localStorage.setItem(`pin-${match.id}`, pin);
-      onClose();
+      setPinLocked(true);
+      setServerS1(s1); setServerS2(s2);
     } else {
-      setErr(result.error || 'Save failed');
+      setErr(result.error || 'Invalid PIN');
     }
   };
 
+  const unlockPin = () => {
+    setPinLocked(false);
+    setPin('');
+    localStorage.removeItem(`pin-${match.id}`);
+  };
+
+  // Core save — used by every increment/decrement and the final-mode button
+  const saveScore = async (newS1, newS2) => {
+    setErr(null);
+    setSyncState('saving');
+    const result = await onSave(newS1, newS2, pin);
+    if (result.ok) {
+      setServerS1(newS1); setServerS2(newS2);
+      setSyncState('saved');
+      setTimeout(() => setSyncState(prev => prev === 'saved' ? 'idle' : prev), 1200);
+    } else {
+      setErr(result.error || 'Save failed');
+      setSyncState('error');
+      // Revert local state to what server has
+      setS1(serverS1 ?? 0); setS2(serverS2 ?? 0);
+      // If PIN rejected, unlock so umpire can re-enter
+      if ((result.error || '').toLowerCase().includes('pin')) {
+        setPinLocked(false);
+      }
+    }
+  };
+
+  const bump = (which, delta) => {
+    if (!pinLocked) return;
+    const newS1 = which === 1 ? Math.max(0, s1 + delta) : s1;
+    const newS2 = which === 2 ? Math.max(0, s2 + delta) : s2;
+    if (newS1 === s1 && newS2 === s2) return; // no-op (e.g., minus at 0)
+    setS1(newS1); setS2(newS2);
+    saveScore(newS1, newS2);
+  };
+
+  const saveFinal = async () => {
+    if (!pinLocked) { setErr('Enter your PIN first'); return; }
+    const n1 = finalS1 === '' ? null : Number(finalS1);
+    const n2 = finalS2 === '' ? null : Number(finalS2);
+    if (n1 == null || n2 == null || Number.isNaN(n1) || Number.isNaN(n2)) { setErr('Enter both scores'); return; }
+    setS1(n1); setS2(n2);
+    await saveScore(n1, n2);
+  };
+
+  const clearScore = async () => {
+    if (!pinLocked) return;
+    if (!confirm('Clear both scores back to 0?')) return;
+    setS1(0); setS2(0); setFinalS1(''); setFinalS2('');
+    // Explicit save with 0/0 — or use null to clear entirely. Going with 0/0 so the
+    // match still shows as "scored" but umpire can tap up from there.
+    await saveScore(0, 0);
+  };
+
+  const winnerAhead = s1 > s2 ? 1 : s2 > s1 ? 2 : 0;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
-      <div className="relative w-full max-w-md" style={{ backgroundColor: '#0a0a0a', border: `1px solid ${c.accent}` }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
+      <div className="relative w-full max-w-lg my-auto" style={{ backgroundColor: '#0a0a0a', border: `1px solid ${c.accent}` }}>
         <div className="absolute -top-px left-0 right-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${c.accent}, transparent)` }}></div>
 
+        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-neutral-800">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <CategoryBadge cat={match.cat} small />
               <span className="text-[11px] text-neutral-500 font-mono">{formatTime12h(match.time)} · COURT {match.court}</span>
             </div>
-            <div className="text-xs text-neutral-400 uppercase tracking-wider">Enter Score</div>
+            <div className="text-xs text-neutral-400 uppercase tracking-wider">Umpire · {match.umpire || '—'}</div>
           </div>
           <button onClick={onClose} className="text-neutral-500 hover:text-white"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="p-6">
-          <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
-            <div>
-              <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 1</div>
-              <div className="text-sm font-bold mb-3 text-white">{match.p1}</div>
-              <input type="number" min="0" inputMode="numeric" value={s1} onChange={(e) => setS1(e.target.value)}
-                className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
-                style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
-            </div>
-            <div className="text-neutral-600 font-mono text-xs pt-8">VS</div>
-            <div>
-              <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 2</div>
-              <div className="text-sm font-bold mb-3 text-white">{match.p2}</div>
-              <input type="number" min="0" inputMode="numeric" value={s2} onChange={(e) => setS2(e.target.value)}
-                className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
-                style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
-            </div>
-          </div>
-
-          <div className="mt-5">
+        {/* PIN bar — shrinks after PIN is verified */}
+        {!pinLocked ? (
+          <div className="p-5 border-b border-neutral-800">
             <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-500 mb-2">
-              <Lock className="w-3 h-3" /> Umpire PIN
+              <Lock className="w-3 h-3" /> Umpire PIN to start scoring
             </label>
-            <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              className="w-full text-center text-2xl font-mono tabular-nums bg-transparent py-3 outline-none text-white tracking-[0.5em]"
-              style={{ border: '1px solid #3f3f3f' }} placeholder="••••" />
-            <div className="text-[10px] text-neutral-600 text-center mt-1.5">
+            <div className="flex gap-2">
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={(e) => { if (e.key === 'Enter') tryLockPin(); }}
+                autoFocus
+                className="flex-1 text-center text-2xl font-mono tabular-nums bg-transparent py-3 outline-none text-white tracking-[0.5em]"
+                style={{ border: '1px solid #3f3f3f' }} placeholder="••••" />
+              <button onClick={tryLockPin}
+                className="px-4 text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+                style={{ backgroundColor: c.accent, color: '#000' }}
+                disabled={pin.length !== 4 || syncState === 'saving'}>
+                {syncState === 'saving' ? '…' : 'Unlock'}
+              </button>
+            </div>
+            <div className="text-[10px] text-neutral-600 mt-1.5">
               Your match PIN — or the admin PIN if an umpire's doesn't work
             </div>
+            {err && <div className="mt-3 text-xs text-red-400 text-center">{err}</div>}
           </div>
+        ) : (
+          <div className="px-4 py-2 border-b border-neutral-800 flex items-center justify-between text-[10px]">
+            <div className="flex items-center gap-2">
+              <Lock className="w-3 h-3 text-green-400" />
+              <span className="text-green-400 uppercase tracking-widest font-bold">PIN verified</span>
+              <span className="text-neutral-600">—</span>
+              <SyncBadge state={syncState} />
+            </div>
+            <button onClick={unlockPin} className="text-neutral-500 hover:text-white uppercase tracking-widest">Change PIN</button>
+          </div>
+        )}
 
-          {err && <div className="mt-3 text-xs text-red-400 text-center">{err}</div>}
-
-          <div className="flex gap-2 mt-5">
-            <button onClick={save} disabled={saving}
-              className="flex-1 py-3 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              style={{ backgroundColor: c.accent, color: '#000' }}>
-              <Check className="w-4 h-4" /> {saving ? 'Saving…' : 'Save Score'}
+        {/* Mode toggle */}
+        {pinLocked && (
+          <div className="flex border-b border-neutral-800">
+            <button onClick={() => setMode('live')}
+              className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
+              style={{
+                backgroundColor: mode === 'live' ? '#131313' : 'transparent',
+                color: mode === 'live' ? c.accent : '#737373',
+                borderBottom: `2px solid ${mode === 'live' ? c.accent : 'transparent'}`,
+              }}>
+              Live Scoring
+            </button>
+            <button onClick={() => setMode('final')}
+              className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
+              style={{
+                backgroundColor: mode === 'final' ? '#131313' : 'transparent',
+                color: mode === 'final' ? c.accent : '#737373',
+                borderBottom: `2px solid ${mode === 'final' ? c.accent : 'transparent'}`,
+              }}>
+              Final Score
             </button>
           </div>
+        )}
 
-          <div className="text-[10px] text-neutral-600 text-center mt-4 tracking-wider">
-            Umpire: {match.umpire || '—'} · Scores sync live
+        {/* Body */}
+        {pinLocked && mode === 'live' && (
+          <div className="p-4 sm:p-6">
+            <div className="space-y-4">
+              <PlayerScorePanel name={match.p1} score={s1} isLeading={winnerAhead === 1}
+                onPlus={() => bump(1, +1)} onMinus={() => bump(1, -1)} color={c} />
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-neutral-800"></div>
+                <span className="text-[10px] text-neutral-600 font-mono tracking-widest">VS</span>
+                <div className="flex-1 h-px bg-neutral-800"></div>
+              </div>
+              <PlayerScorePanel name={match.p2} score={s2} isLeading={winnerAhead === 2}
+                onPlus={() => bump(2, +1)} onMinus={() => bump(2, -1)} color={c} />
+            </div>
+
+            <div className="flex items-center justify-between mt-5 pt-4 border-t border-neutral-900">
+              <button onClick={clearScore}
+                className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-neutral-500 hover:text-red-400 transition-colors">
+                <RotateCcw className="w-3 h-3" /> Reset to 0-0
+              </button>
+              <div className="text-[10px] text-neutral-600 tracking-widest">
+                Every tap syncs live
+              </div>
+            </div>
+
+            {err && <div className="mt-3 text-xs text-red-400 text-center">{err}</div>}
           </div>
+        )}
+
+        {pinLocked && mode === 'final' && (
+          <div className="p-6">
+            <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-3 text-center">
+              Type the final scores
+            </div>
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
+              <div>
+                <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 1</div>
+                <div className="text-sm font-bold mb-3 text-white truncate">{match.p1}</div>
+                <input type="number" min="0" inputMode="numeric" value={finalS1} onChange={(e) => setFinalS1(e.target.value)}
+                  className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
+                  style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
+              </div>
+              <div className="text-neutral-600 font-mono text-xs pt-8">VS</div>
+              <div>
+                <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 2</div>
+                <div className="text-sm font-bold mb-3 text-white truncate">{match.p2}</div>
+                <input type="number" min="0" inputMode="numeric" value={finalS2} onChange={(e) => setFinalS2(e.target.value)}
+                  className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
+                  style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
+              </div>
+            </div>
+
+            {err && <div className="mt-3 text-xs text-red-400 text-center">{err}</div>}
+
+            <button onClick={saveFinal} disabled={syncState === 'saving'}
+              className="w-full mt-5 py-3 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              style={{ backgroundColor: c.accent, color: '#000' }}>
+              <Check className="w-4 h-4" /> {syncState === 'saving' ? 'Saving…' : 'Save Final Score'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Little sync indicator shown next to "PIN verified"
+const SyncBadge = ({ state }) => {
+  if (state === 'saving') return <span className="text-neutral-400 uppercase tracking-widest">Syncing…</span>;
+  if (state === 'saved') return <span className="text-green-400 uppercase tracking-widest flex items-center gap-1"><Check className="w-3 h-3" />Saved</span>;
+  if (state === 'error') return <span className="text-red-400 uppercase tracking-widest">Error</span>;
+  return <span className="text-neutral-600 uppercase tracking-widest">Ready</span>;
+};
+
+// Big tap-to-score panel for live mode
+const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) => {
+  return (
+    <div className="p-3 rounded" style={{
+      backgroundColor: isLeading ? '#131313' : 'transparent',
+      border: `1px solid ${isLeading ? color.accent + '80' : '#2a2a2a'}`,
+    }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className={`text-sm font-bold truncate ${isLeading ? 'text-white' : 'text-neutral-300'}`}>
+          {isLeading && <span style={{ color: color.accent }}>▸ </span>}{name}
         </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onMinus}
+          disabled={score === 0}
+          className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+          style={{ backgroundColor: '#1a1a1a', border: '1px solid #3f3f3f', color: '#a3a3a3' }}
+          aria-label="Decrement">
+          <Minus className="w-6 h-6" />
+        </button>
+        <div className="flex-1 text-center font-mono font-black tabular-nums text-6xl sm:text-7xl py-2" style={{ color: isLeading ? '#fff' : '#a3a3a3' }}>
+          {score}
+        </div>
+        <button
+          onClick={onPlus}
+          className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center transition-all active:scale-95"
+          style={{ backgroundColor: color.accent, color: '#000' }}
+          aria-label="Increment">
+          <Plus className="w-7 h-7" strokeWidth={3} />
+        </button>
       </div>
     </div>
   );
