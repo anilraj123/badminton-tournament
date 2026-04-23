@@ -107,7 +107,8 @@ const calculateStandings = (matches) => {
   SCHEDULE.forEach(match => {
     if (match.isPlayoff) return;
     const row = matches[match.id];
-    if (!row || row.score1 == null || row.score2 == null) return;
+    // Only count matches officially marked as final
+    if (!row || !row.is_final) return;
     const s1 = row.score1, s2 = row.score2;
     const groups = GROUPS[match.cat] || {};
     for (const [gName, players] of Object.entries(groups)) {
@@ -198,12 +199,14 @@ const CourtCard = ({ court, match, matches, isLive }) => {
 
   const row = matches[match.id];
   const hasScore = row && row.score1 != null && row.score2 != null;
+  const isFinal = !!row?.is_final;
   const winner = hasScore ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
+  const winnerName = winner === 1 ? match.p1 : winner === 2 ? match.p2 : null;
   const c = CAT_COLORS[match.cat];
 
   return (
     <div className="rounded-2xl bg-white shadow-lg flex flex-col overflow-hidden"
-         style={{ border: `3px solid ${isLive ? c.accent : '#e2e8f0'}` }}>
+         style={{ border: `3px solid ${isFinal ? '#15803d' : isLive ? c.accent : '#e2e8f0'}` }}>
       {/* Top strip */}
       <div className="px-5 py-3 flex items-center justify-between" style={{ backgroundColor: c.soft }}>
         <div className="text-xl font-black tracking-widest" style={{ color: c.text }}>COURT {court}</div>
@@ -228,8 +231,10 @@ const CourtCard = ({ court, match, matches, isLive }) => {
         <div className="text-sm font-semibold text-slate-500 tracking-wider uppercase">
           Umpire · {match.umpire || '—'}
         </div>
-        {hasScore && (
-          <div className="text-sm font-bold text-emerald-600 tracking-wider uppercase">Final</div>
+        {isFinal && winnerName && (
+          <div className="text-sm font-bold text-emerald-600 tracking-wider uppercase flex items-center gap-2">
+            <span className="text-emerald-500">🏆</span> Final · {winnerName} wins
+          </div>
         )}
       </div>
     </div>

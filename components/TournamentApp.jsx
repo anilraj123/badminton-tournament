@@ -76,9 +76,9 @@ function useMatches() {
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, []);
 
-  const updateScore = async (matchId, s1, s2, pin) => {
+  const updateScore = async (matchId, s1, s2, pin, isFinal = false) => {
     const { data, error: err } = await supabase.rpc('update_score', {
-      p_match_id: matchId, p_score1: s1, p_score2: s2, p_pin: pin,
+      p_match_id: matchId, p_score1: s1, p_score2: s2, p_pin: pin, p_is_final: isFinal,
     });
     if (err) return { ok: false, error: err.message };
     return data;
@@ -134,7 +134,8 @@ const calculateStandings = (matches) => {
   SCHEDULE.forEach(match => {
     if (match.isPlayoff) return;
     const row = matches[match.id];
-    if (!row || row.score1 == null || row.score2 == null) return;
+    // Only count matches officially marked as final — in-progress scores don't affect standings
+    if (!row || !row.is_final) return;
     const s1 = row.score1, s2 = row.score2;
     const groups = GROUPS[match.cat] || {};
     for (const [gName, players] of Object.entries(groups)) {
@@ -181,18 +182,20 @@ const PlayerRow = ({ name, score, isWinner, hasScore }) => (
 
 const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
   const hasScore = row && row.score1 != null && row.score2 != null;
+  const isFinal = !!row?.is_final;
   const involvesMe = myPlayer && matchInvolvesPlayer(match, myPlayer);
   const c = CAT_COLORS[match.cat] || CAT_COLORS.MS;
   const winner = hasScore ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
+  const winnerName = winner === 1 ? match.p1 : winner === 2 ? match.p2 : null;
 
   return (
     <div className="relative group transition-all duration-200"
       style={{
         backgroundColor: isLive ? '#1a1a1a' : '#131313',
-        border: `1px solid ${isLive ? c.accent : involvesMe ? '#fbbf24' : '#2a2a2a'}`,
-        boxShadow: isLive ? `0 0 24px ${c.accent}30, inset 0 1px 0 ${c.accent}20` : involvesMe ? '0 0 0 1px #fbbf2440' : 'none',
+        border: `1px solid ${isFinal ? '#15803d' : isLive ? c.accent : involvesMe ? '#fbbf24' : '#2a2a2a'}`,
+        boxShadow: isLive ? `0 0 24px ${c.accent}30, inset 0 1px 0 ${c.accent}20` : isFinal ? '0 0 0 1px #15803d40' : involvesMe ? '0 0 0 1px #fbbf2440' : 'none',
       }}>
-      {isLive && (
+      {isLive && !isFinal && (
         <div className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold tracking-widest flex items-center gap-1"
              style={{ backgroundColor: c.accent, color: '#000' }}>
           <span className="relative flex h-1.5 w-1.5">
@@ -200,6 +203,12 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-black"></span>
           </span>
           LIVE
+        </div>
+      )}
+      {isFinal && (
+        <div className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold tracking-widest flex items-center gap-1"
+             style={{ backgroundColor: '#15803d', color: '#fff' }}>
+          <Check className="w-2.5 h-2.5" strokeWidth={3} /> FINAL
         </div>
       )}
       <div className="p-3">
@@ -231,6 +240,17 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
           </div>
         )}
 
+        {/* Winner banner — only when officially marked final */}
+        {isFinal && winnerName && (
+          <div className="mt-3 px-3 py-2 rounded flex items-center gap-2"
+               style={{ backgroundColor: '#0f1a0f', border: '1px solid #15803d' }}>
+            <Trophy className="w-4 h-4 shrink-0 text-green-400" />
+            <div className="text-[11px] uppercase tracking-widest font-bold text-green-400 truncate">
+              Winner · {winnerName}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mt-3 pt-2 border-t border-neutral-800/60">
           <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider">
             Umpire · {match.umpire || '—'}
@@ -238,8 +258,11 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
           {!match.isPlayoff && (
             <button onClick={() => onEdit(match)}
               className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 transition-colors"
-              style={{ color: hasScore ? '#737373' : c.accent, border: `1px solid ${hasScore ? '#404040' : c.accent}60` }}>
-              <Edit3 className="w-2.5 h-2.5" />{hasScore ? 'Edit' : 'Score'}
+              style={{
+                color: isFinal ? '#737373' : hasScore ? '#737373' : c.accent,
+                border: `1px solid ${isFinal ? '#404040' : hasScore ? '#404040' : c.accent}60`,
+              }}>
+              <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit Final' : hasScore ? 'Edit' : 'Score'}
             </button>
           )}
         </div>
@@ -292,7 +315,8 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     setErr(null);
     if (pin.length !== 4) { setErr('Enter your 4-digit PIN'); return; }
     setSyncState('saving');
-    const result = await onSave(s1, s2, pin);
+    // Preserve existing is_final state during PIN verification (don't flip it)
+    const result = await onSave(s1, s2, pin, !!row?.is_final);
     setSyncState('idle');
     if (result.ok) {
       localStorage.setItem(`pin-${match.id}`, pin);
@@ -310,23 +334,23 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
   };
 
   // Core save — used by every increment/decrement and the final-mode button
-  const saveScore = async (newS1, newS2) => {
+  const saveScore = async (newS1, newS2, isFinal = false) => {
     setErr(null);
     setSyncState('saving');
-    const result = await onSave(newS1, newS2, pin);
+    const result = await onSave(newS1, newS2, pin, isFinal);
     if (result.ok) {
       setServerS1(newS1); setServerS2(newS2);
       setSyncState('saved');
       setTimeout(() => setSyncState(prev => prev === 'saved' ? 'idle' : prev), 1200);
+      return true;
     } else {
       setErr(result.error || 'Save failed');
       setSyncState('error');
-      // Revert local state to what server has
       setS1(serverS1 ?? 0); setS2(serverS2 ?? 0);
-      // If PIN rejected, unlock so umpire can re-enter
       if ((result.error || '').toLowerCase().includes('pin')) {
         setPinLocked(false);
       }
+      return false;
     }
   };
 
@@ -334,9 +358,18 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     if (!pinLocked) return;
     const newS1 = which === 1 ? Math.max(0, s1 + delta) : s1;
     const newS2 = which === 2 ? Math.max(0, s2 + delta) : s2;
-    if (newS1 === s1 && newS2 === s2) return; // no-op (e.g., minus at 0)
+    if (newS1 === s1 && newS2 === s2) return;
     setS1(newS1); setS2(newS2);
-    saveScore(newS1, newS2);
+    // Live increments: preserve current is_final state. Umpire may be editing a finished
+    // match (unlikely but possible) — don't silently un-finalize.
+    saveScore(newS1, newS2, !!row?.is_final);
+  };
+
+  const markAsFinal = async () => {
+    if (!pinLocked) return;
+    if (s1 === 0 && s2 === 0) { setErr('Score is 0-0 — enter some points first'); return; }
+    const ok = await saveScore(s1, s2, true);
+    if (ok) onClose();
   };
 
   const saveFinal = async () => {
@@ -344,17 +377,19 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     const n1 = finalS1 === '' ? null : Number(finalS1);
     const n2 = finalS2 === '' ? null : Number(finalS2);
     if (n1 == null || n2 == null || Number.isNaN(n1) || Number.isNaN(n2)) { setErr('Enter both scores'); return; }
+    if (n1 === n2) { setErr('Scores must differ to mark as final'); return; }
     setS1(n1); setS2(n2);
-    await saveScore(n1, n2);
+    // Final-score tab always marks as final (that's the point of that tab)
+    const ok = await saveScore(n1, n2, true);
+    if (ok) onClose();
   };
 
   const clearScore = async () => {
     if (!pinLocked) return;
     if (!confirm('Clear both scores back to 0?')) return;
     setS1(0); setS2(0); setFinalS1(''); setFinalS2('');
-    // Explicit save with 0/0 — or use null to clear entirely. Going with 0/0 so the
-    // match still shows as "scored" but umpire can tap up from there.
-    await saveScore(0, 0);
+    // Reset also un-finalizes so the match returns to "in progress" state
+    await saveScore(0, 0, false);
   };
 
   const winnerAhead = s1 > s2 ? 1 : s2 > s1 ? 2 : 0;
@@ -452,7 +487,26 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
                 onPlus={() => bump(2, +1)} onMinus={() => bump(2, -1)} color={c} />
             </div>
 
-            <div className="flex items-center justify-between mt-5 pt-4 border-t border-neutral-900">
+            {/* MARK AS FINAL — the big prominent action */}
+            {!row?.is_final ? (
+              <button onClick={markAsFinal} disabled={syncState === 'saving' || (s1 === 0 && s2 === 0)}
+                className="w-full mt-5 py-4 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ backgroundColor: c.accent, color: '#000' }}>
+                <Trophy className="w-4 h-4" /> Mark as Final — {winnerAhead === 1 ? match.p1 : winnerAhead === 2 ? match.p2 : 'Winner TBD'} {winnerAhead > 0 && 'wins'}
+              </button>
+            ) : (
+              <div className="mt-5 rounded p-3 flex items-center justify-between" style={{ backgroundColor: '#0f1a0f', border: '1px solid #1f5f1f' }}>
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest font-bold text-green-400">
+                  <Trophy className="w-4 h-4" /> Final · {winnerAhead === 1 ? match.p1 : match.p2} wins
+                </div>
+                <button onClick={async () => { await saveScore(s1, s2, false); }}
+                  className="text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white transition-colors">
+                  Undo final
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-900">
               <button onClick={clearScore}
                 className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-neutral-500 hover:text-red-400 transition-colors">
                 <RotateCcw className="w-3 h-3" /> Reset to 0-0
@@ -812,12 +866,12 @@ export default function TournamentApp() {
     if (v) localStorage.setItem('my-player', v); else localStorage.removeItem('my-player');
   };
 
-  const handleSave = async (s1, s2, pin) => {
+  const handleSave = async (s1, s2, pin, isFinal = false) => {
     if (!editing) return { ok: false, error: 'No match selected' };
-    return await updateScore(editing.id, s1, s2, pin);
+    return await updateScore(editing.id, s1, s2, pin, isFinal);
   };
 
-  const completed = Object.values(matches).filter(r => r.score1 != null && r.score2 != null && !r.is_playoff).length;
+  const completed = Object.values(matches).filter(r => r.is_final && !r.is_playoff).length;
   const totalNonPlayoff = SCHEDULE.filter(m => !m.isPlayoff).length;
 
   return (
