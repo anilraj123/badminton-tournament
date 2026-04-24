@@ -89,14 +89,19 @@ function useMatches() {
 }
 
 function useCurrentTime() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => { const i = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(i); }, []);
+  // Start with null on server to avoid hydration mismatch
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    setNow(new Date());
+    const i = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(i);
+  }, []);
   return now;
 }
 
 // Check if a match is actively being scored (last activity within 5 minutes)
 const isMatchLive = (row, now) => {
-  if (!row || !row.last_activity) return false;
+  if (!row || !row.last_activity || !now) return false;
   const lastActivity = new Date(row.last_activity);
   const fiveMinutesAgo = new Date(now - 5 * 60 * 1000);
   return lastActivity > fiveMinutesAgo;
@@ -1018,9 +1023,9 @@ export default function TournamentApp() {
               </div>
               <h1 className="font-display text-5xl md:text-7xl font-bold leading-none text-white">MTCSV OPEN</h1>
               <div className="flex items-baseline gap-3 mt-2 font-mono text-xs text-neutral-500 flex-wrap">
-                <span>{now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                <span>{now ? now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '—'}</span>
                 <span className="text-neutral-700">·</span>
-                <span className="tabular-nums">{now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="tabular-nums">{now ? now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
                 <span className="text-neutral-700">·</span>
                 <span className="flex items-center gap-1" style={{ color: connected ? '#4ade80' : '#737373' }}>
                   {connected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
