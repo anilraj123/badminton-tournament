@@ -79,11 +79,12 @@ function useClock() {
   return now;
 }
 
-const getLiveSlot = (now) => {
-  const nm = now.getHours()*60 + now.getMinutes();
-  const slots = [...new Set(SCHEDULE.map(m => m.time))].sort();
-  for (const s of slots) { const start = timeToMinutes(s); if (nm >= start && nm < start+12) return s; }
-  return null;
+// Check if a match is actively being scored (last activity within 5 minutes)
+const isMatchLive = (row, now) => {
+  if (!row || !row.last_activity) return false;
+  const lastActivity = new Date(row.last_activity);
+  const fiveMinutesAgo = new Date(now - 5 * 60 * 1000);
+  return lastActivity > fiveMinutesAgo;
 };
 
 const getNextSlot = (now) => {
@@ -134,8 +135,10 @@ const calculateStandings = (matches) => {
 // ============================================================
 // PANEL 1: Live matches across all 3 courts + next slot preview
 // ============================================================
-const LiveMatchesPanel = ({ matches, liveSlot, nextSlot }) => {
-  const liveMatches = liveSlot ? SCHEDULE.filter(m => m.time === liveSlot).sort((a,b) => a.court - b.court) : [];
+const LiveMatchesPanel = ({ matches, now, nextSlot }) => {
+  // Find all matches with recent activity (live matches)
+  const liveMatches = SCHEDULE.filter(m => isMatchLive(matches[m.id], now)).sort((a,b) => a.court - b.court);
+  const hasLive = liveMatches.length > 0;
   const nextMatches = nextSlot ? SCHEDULE.filter(m => m.time === nextSlot).sort((a,b) => a.court - b.court) : [];
 
   return (
@@ -144,12 +147,19 @@ const LiveMatchesPanel = ({ matches, liveSlot, nextSlot }) => {
       <div className="flex-[2] flex flex-col min-h-0">
         <div className="flex items-baseline gap-4 mb-4">
           <div className="text-5xl font-black text-slate-900 tracking-tight">
-            {liveSlot ? 'NOW PLAYING' : 'UP NEXT'}
+            {hasLive ? 'NOW PLAYING' : 'UP NEXT'}
           </div>
-          <div className="text-3xl font-mono font-bold text-slate-600 tabular-nums">
-            {liveSlot ? fmtTime(liveSlot) : (nextSlot ? fmtTime(nextSlot) : '—')}
-          </div>
-          {liveSlot && (
+          {hasLive && liveMatches.length > 0 && (
+            <div className="text-3xl font-mono font-bold text-slate-600 tabular-nums">
+              {fmtTime(liveMatches[0].time)}
+            </div>
+          )}
+          {!hasLive && nextSlot && (
+            <div className="text-3xl font-mono font-bold text-slate-600 tabular-nums">
+              {fmtTime(nextSlot)}
+            </div>
+          )}
+          {hasLive && (
             <div className="flex items-center gap-2 px-3 py-1 bg-red-500 text-white font-bold text-lg rounded">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-white opacity-75"></span>
@@ -162,14 +172,14 @@ const LiveMatchesPanel = ({ matches, liveSlot, nextSlot }) => {
 
         <div className="grid grid-cols-3 gap-5 flex-1 min-h-0">
           {[1,2,3].map(court => {
-            const match = (liveSlot ? liveMatches : nextMatches).find(m => m.court === court);
-            return <CourtCard key={court} court={court} match={match} matches={matches} isLive={!!liveSlot} />;
+            const match = (hasLive ? liveMatches : nextMatches).find(m => m.court === court);
+            return <CourtCard key={court} court={court} match={match} matches={matches} isLive={isMatchLive(matches[match?.id], now)} />;
           })}
         </div>
       </div>
 
       {/* Next preview — bottom 1/3 (only when something is live) */}
-      {liveSlot && nextSlot && (
+      {hasLive && nextSlot && (
         <div className="flex-1 flex flex-col min-h-0">
           <div className="flex items-baseline gap-4 mb-3">
             <div className="text-3xl font-black text-slate-500 tracking-tight">UP NEXT</div>
@@ -283,7 +293,7 @@ const NextCard = ({ court, match }) => {
 // ============================================================
 // PANEL 2: Standings — cycles through each category's groups
 // ============================================================
-const StandingsPanel = ({ matches, subIndex }) => {
+const StandingsPanel = ({ matches, now, subIndex }) => {
   const standings = useMemo(() => calculateStandings(matches), [matches]);
 
   // Build all "category + group" panels to show
@@ -368,7 +378,7 @@ const StandingsCard = ({ cat, groupName, rows }) => {
 // ============================================================
 // PANEL 3: Brackets — one category per sub-cycle
 // ============================================================
-const BracketsPanel = ({ matches, subIndex }) => {
+const BracketsPanel = ({ matches, now, subIndex }) => {
   const categories = Object.keys(GROUPS);
   const cat = categories[subIndex % categories.length];
   const playoffs = SCHEDULE.filter(m => m.isPlayoff && m.cat === cat);
@@ -471,7 +481,6 @@ const CycleIndicator = ({ panels, activeIndex, elapsed }) => {
 export default function TvDashboard() {
   const { matches, loading } = useMatches();
   const now = useClock();
-  const liveSlot = getLiveSlot(now);
   const nextSlot = getNextSlot(now);
 
   // Panel cycling state
@@ -527,7 +536,7 @@ export default function TvDashboard() {
         {loading ? (
           <div className="flex items-center justify-center h-full text-2xl text-slate-400">Loading tournament…</div>
         ) : (
-          <ActiveComponent matches={matches} liveSlot={liveSlot} nextSlot={nextSlot} subIndex={subIndex} />
+          <ActiveComponent matches={matches} now={now} nextSlot={nextSlot} subIndex={subIndex} />
         )}
       </main>
 

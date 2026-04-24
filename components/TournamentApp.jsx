@@ -94,11 +94,12 @@ function useCurrentTime() {
   return now;
 }
 
-const getLiveSlot = (now) => {
-  const nm = now.getHours()*60 + now.getMinutes();
-  const slots = [...new Set(SCHEDULE.map(m => m.time))].sort();
-  for (const s of slots) { const start = timeToMinutes(s); if (nm >= start && nm < start+12) return s; }
-  return null;
+// Check if a match is actively being scored (last activity within 5 minutes)
+const isMatchLive = (row, now) => {
+  if (!row || !row.last_activity) return false;
+  const lastActivity = new Date(row.last_activity);
+  const fiveMinutesAgo = new Date(now - 5 * 60 * 1000);
+  return lastActivity > fiveMinutesAgo;
 };
 
 // ---------- standings ----------
@@ -635,7 +636,7 @@ const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) =>
 };
 
 // ---------- Tabs ----------
-const ScheduleTab = ({ matches, liveSlot, onEdit, myPlayer }) => {
+const ScheduleTab = ({ matches, now, onEdit, myPlayer }) => {
   const [catFilter, setCatFilter] = useState('ALL');
   const timeSlots = useMemo(() => [...new Set(SCHEDULE.map(m => m.time))].sort(), []);
   const filtered = catFilter === 'ALL' ? SCHEDULE : SCHEDULE.filter(m => m.cat === catFilter);
@@ -659,12 +660,13 @@ const ScheduleTab = ({ matches, liveSlot, onEdit, myPlayer }) => {
       {timeSlots.map(slot => {
         const slotMatches = filtered.filter(m => m.time === slot);
         if (slotMatches.length === 0) return null;
-        const isLive = slot === liveSlot;
+        // Check if ANY match in this slot is actively being scored
+        const hasLiveMatch = slotMatches.some(m => isMatchLive(matches[m.id], now));
         return (
           <div key={slot} className="mb-8">
             <div className="flex items-baseline gap-3 mb-3 sticky top-14 py-2 z-10" style={{ backgroundColor: '#050505' }}>
               <div className="text-2xl font-bold text-white font-mono tabular-nums">{formatTime12h(slot)}</div>
-              {isLive && (
+              {hasLiveMatch && (
                 <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold tracking-widest" style={{ backgroundColor: '#ef4444', color: '#fff' }}>
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-white opacity-75"></span>
@@ -677,7 +679,7 @@ const ScheduleTab = ({ matches, liveSlot, onEdit, myPlayer }) => {
               {slot === '16:00' && <div className="text-[10px] uppercase tracking-widest text-amber-400">Tea Break</div>}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {slotMatches.map(m => <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isLive} onEdit={onEdit} myPlayer={myPlayer} />)}
+              {slotMatches.map(m => <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} />)}
             </div>
           </div>
         );
@@ -817,7 +819,7 @@ const BracketsTab = ({ matches }) => {
   );
 };
 
-const MyMatchesTab = ({ matches, liveSlot, onEdit, myPlayer, setMyPlayer }) => {
+const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer }) => {
   const my = myPlayer ? SCHEDULE.filter(m => matchInvolvesPlayer(m, myPlayer)) : [];
   const playing = my.filter(m => {
     const check = (f) => f && (f.toLowerCase().includes(myPlayer.toLowerCase())
@@ -851,7 +853,7 @@ const MyMatchesTab = ({ matches, liveSlot, onEdit, myPlayer, setMyPlayer }) => {
                 {playing.map(m => (
                   <div key={m.id}>
                     <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
-                    <MatchCard match={m} row={matches[m.id]} isLive={m.time === liveSlot} onEdit={onEdit} myPlayer={myPlayer} />
+                    <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} />
                   </div>
                 ))}
               </div>
@@ -867,7 +869,7 @@ const MyMatchesTab = ({ matches, liveSlot, onEdit, myPlayer, setMyPlayer }) => {
                 {umpiring.map(m => (
                   <div key={m.id}>
                     <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
-                    <MatchCard match={m} row={matches[m.id]} isLive={m.time === liveSlot} onEdit={onEdit} myPlayer={myPlayer} />
+                    <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} />
                   </div>
                 ))}
               </div>
@@ -884,7 +886,6 @@ const MyMatchesTab = ({ matches, liveSlot, onEdit, myPlayer, setMyPlayer }) => {
 export default function TournamentApp() {
   const { matches, loading, connected, error, updateScore } = useMatches();
   const now = useCurrentTime();
-  const liveSlot = getLiveSlot(now);
   const [activeTab, setActiveTab] = useState('schedule');
   const [editing, setEditing] = useState(null);
   const [myPlayer, setMyPlayerState] = useState('');
@@ -928,18 +929,6 @@ export default function TournamentApp() {
                   {connected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
                   {connected ? 'LIVE SYNC' : 'OFFLINE'}
                 </span>
-                {liveSlot && (
-                  <>
-                    <span className="text-neutral-700">·</span>
-                    <span className="text-red-400 flex items-center gap-1">
-                      <span className="relative flex h-1.5 w-1.5">
-                        <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
-                      </span>
-                      SLOT {liveSlot} LIVE
-                    </span>
-                  </>
-                )}
               </div>
             </div>
             <div className="flex gap-6 font-mono">
@@ -989,10 +978,10 @@ export default function TournamentApp() {
           <div className="text-center text-neutral-500 py-20">Loading tournament data…</div>
         ) : (
           <>
-            {activeTab === 'schedule' && <ScheduleTab matches={matches} liveSlot={liveSlot} onEdit={setEditing} myPlayer={myPlayer} />}
+            {activeTab === 'schedule' && <ScheduleTab matches={matches} now={now} onEdit={setEditing} myPlayer={myPlayer} />}
             {activeTab === 'standings' && <StandingsTab matches={matches} />}
             {activeTab === 'brackets' && <BracketsTab matches={matches} />}
-            {activeTab === 'my' && <MyMatchesTab matches={matches} liveSlot={liveSlot} onEdit={setEditing} myPlayer={myPlayer} setMyPlayer={setMyPlayer} />}
+            {activeTab === 'my' && <MyMatchesTab matches={matches} now={now} onEdit={setEditing} myPlayer={myPlayer} setMyPlayer={setMyPlayer} />}
             {activeTab === 'rules' && <Rules />}
           </>
         )}
