@@ -1,10 +1,10 @@
 import '../globals.css';
-import TvDashboardSnapshot from '../../components/TvDashboardSnapshot';
+import TvDashboard from '../../components/TvDashboard';
 
 export const metadata = {
-  title: 'MTCSV Open — Live Dashboard',
+  title: 'MTCSV Open — Dashboard',
 };
 
 export default function TvPage() {
-  return <TvDashboardSnapshot />;
+  return <TvDashboard />;
 }
