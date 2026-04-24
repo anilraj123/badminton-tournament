@@ -322,10 +322,10 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
           <button onClick={() => onEdit(match)}
             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 transition-colors"
             style={{
-              color: isFinal ? '#737373' : hasScore ? '#737373' : c.accent,
-              border: `1px solid ${isFinal ? '#404040' : hasScore ? '#404040' : c.accent}60`,
+              color: isFinal ? '#737373' : c.accent,
+              border: `1px solid ${isFinal ? '#404040' : c.accent}60`,
             }}>
-            <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit' : hasScore ? 'Edit' : 'Score'}
+            <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit' : 'Score'}
           </button>
         </div>
       </div>
