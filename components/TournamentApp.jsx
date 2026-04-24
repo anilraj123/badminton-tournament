@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff, Plus, Minus, RotateCcw, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES } from '../lib/tournament-data';
+import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES, PLAYOFF_STRUCTURE, FINALS_STRUCTURE } from '../lib/tournament-data';
 import Rules from './Rules';
 
 const CAT_COLORS = {
@@ -103,11 +103,8 @@ const isMatchLive = (row, now) => {
 };
 
 // ---------- standings ----------
-// Normalize names so "Linesh/ Anil" (groups) matches "Linesh/Anil" (schedule),
-// and team prefixes like "Ari Kombans- Satish/Shaji" match "Ari Kombans".
 const normalizeName = (s) => s.replace(/\s+/g, '').toLowerCase();
 const teamPrefix = (s) => {
-  // "Ari Kombans- Satish/Shaji" → "Ari Kombans"
   const m = s.split('-')[0].trim();
   return normalizeName(m);
 };
@@ -116,10 +113,8 @@ const namesMatch = (groupPlayer, schedulePlayer) => {
   const a = normalizeName(groupPlayer);
   const b = normalizeName(schedulePlayer);
   if (a === b) return true;
-  // Team prefix match (group has "Ari Kombans- Satish/Shaji", schedule has "Ari Kombans")
   if (teamPrefix(groupPlayer) === b) return true;
   if (a === teamPrefix(schedulePlayer)) return true;
-  // Alias map — handles schedule abbreviations (e.g. "George Thomas/Manoj" → "George Thomas/ Manoj Abraham")
   const aliased = NAME_ALIASES[schedulePlayer];
   if (aliased && normalizeName(aliased) === a) return true;
   return false;
@@ -136,7 +131,6 @@ const calculateStandings = (matches) => {
   SCHEDULE.forEach(match => {
     if (match.isPlayoff) return;
     const row = matches[match.id];
-    // Only count matches officially marked as final — in-progress scores don't affect standings
     if (!row || !row.is_final) return;
     const s1 = row.score1, s2 = row.score2;
     const groups = GROUPS[match.cat] || {};
@@ -158,6 +152,41 @@ const calculateStandings = (matches) => {
     return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
   })));
   return st;
+};
+
+// Resolve actual team name for a semifinal slot based on current standings
+const resolveSemiSlot = (standings, slotInfo, cat) => {
+  if (!slotInfo || !standings[cat]) return null;
+  const groupStandings = standings[cat][slotInfo.group];
+  if (!groupStandings || groupStandings.length < slotInfo.rank) return null;
+  const entry = groupStandings[slotInfo.rank - 1];
+  return entry && entry.played > 0 ? entry.name : null;
+};
+
+// Calculate the winner of a semi-final based on 3-set scores
+// Returns the winning team name, or null if not yet determined
+const getSemiWinner = (matches, semiId, standings) => {
+  const structure = PLAYOFF_STRUCTURE[semiId];
+  if (!structure) return null;
+  
+  // Get the actual team names for slot1 and slot2
+  const team1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
+  const team2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
+  if (!team1 || !team2) return null;
+  
+  // Count sets won by each team
+  let team1Sets = 0, team2Sets = 0;
+  for (let setNum = 1; setNum <= 3; setNum++) {
+    const row = matches[`${semiId}_s${setNum}`];
+    if (row && row.is_final && row.score1 != null && row.score2 != null) {
+      if (row.score1 > row.score2) team1Sets++;
+      else if (row.score2 > row.score1) team2Sets++;
+    }
+  }
+  
+  if (team1Sets >= 2) return team1;
+  if (team2Sets >= 2) return team2;
+  return null;
 };
 
 // ---------- small UI ----------
@@ -182,13 +211,17 @@ const PlayerRow = ({ name, score, isWinner, hasScore }) => (
   </div>
 );
 
-const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
+const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP2 }) => {
   const hasScore = row && row.score1 != null && row.score2 != null;
   const isFinal = !!row?.is_final;
   const involvesMe = myPlayer && matchInvolvesPlayer(match, myPlayer);
   const c = CAT_COLORS[match.cat] || CAT_COLORS.MS;
   const winner = hasScore ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
-  const winnerName = winner === 1 ? match.p1 : winner === 2 ? match.p2 : null;
+  
+  // Use resolved team names for playoffs if available, otherwise use schedule placeholders
+  const displayP1 = resolvedP1 || match.p1;
+  const displayP2 = resolvedP2 || match.p2;
+  const winnerName = winner === 1 ? displayP1 : winner === 2 ? displayP2 : null;
 
   return (
     <div className="relative group transition-all duration-200"
@@ -217,38 +250,34 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <CategoryBadge cat={match.cat} small />
-            {row?.match_type && row.match_type !== 'prelim' && (
+            {match.matchType === 'semi' && (
               <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
-                    style={{ backgroundColor: row.match_type === 'semi' ? '#854d0e' : '#7c2d12', color: '#fff' }}>
-                {row.match_type === 'semi' ? 'Semi' : 'Final'}
+                    style={{ backgroundColor: '#854d0e', color: '#fff' }}>
+                SEMI{match.setNumber ? ` SET ${match.setNumber}` : ''}
               </span>
             )}
-            {match.isPlayoff && <span className="text-[10px] font-bold tracking-widest uppercase text-yellow-400">{match.stage}</span>}
+            {match.matchType === 'final' && (
+              <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: '#7c2d12', color: '#fff' }}>
+                FINAL{match.setNumber ? ` SET ${match.setNumber}` : ''}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-neutral-500 font-mono">
             <MapPin className="w-2.5 h-2.5" />COURT {match.court}
           </div>
         </div>
 
-        {match.isPlayoff && match.label ? (
-          <div className="py-2 text-center">
-            <div className="text-xs font-bold text-yellow-400 uppercase tracking-wider">{match.label}</div>
-            <div className="text-[11px] text-neutral-500 mt-0.5">Winners advance · TBD</div>
-            {hasScore && <div className="mt-2 font-mono font-bold text-lg" style={{ color: c.accent }}>{row.score1} — {row.score2}</div>}
+        <div className="space-y-1.5">
+          <PlayerRow name={displayP1} score={row?.score1} isWinner={winner === 1} hasScore={hasScore} />
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-px bg-neutral-800"></div>
+            <span className="text-[10px] text-neutral-600 font-mono">VS</span>
+            <div className="flex-1 h-px bg-neutral-800"></div>
           </div>
-        ) : (
-          <div className="space-y-1.5">
-            <PlayerRow name={match.p1} score={row?.score1} isWinner={winner === 1} hasScore={hasScore} />
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-px bg-neutral-800"></div>
-              <span className="text-[10px] text-neutral-600 font-mono">VS</span>
-              <div className="flex-1 h-px bg-neutral-800"></div>
-            </div>
-            <PlayerRow name={match.p2} score={row?.score2} isWinner={winner === 2} hasScore={hasScore} />
-          </div>
-        )}
+          <PlayerRow name={displayP2} score={row?.score2} isWinner={winner === 2} hasScore={hasScore} />
+        </div>
 
-        {/* Winner banner — only when officially marked final */}
         {isFinal && winnerName && (
           <div className="mt-3 px-3 py-2 rounded flex items-center gap-2"
                style={{ backgroundColor: '#0f1a0f', border: '1px solid #15803d' }}>
@@ -263,16 +292,14 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
           <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider">
             Umpire · {match.umpire || '—'}
           </div>
-          {!match.isPlayoff && (
-            <button onClick={() => onEdit(match)}
-              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 transition-colors"
-              style={{
-                color: isFinal ? '#737373' : hasScore ? '#737373' : c.accent,
-                border: `1px solid ${isFinal ? '#404040' : hasScore ? '#404040' : c.accent}60`,
-              }}>
-              <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit' : hasScore ? 'Edit' : 'Score'}
-            </button>
-          )}
+          <button onClick={() => onEdit(match)}
+            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 transition-colors"
+            style={{
+              color: isFinal ? '#737373' : hasScore ? '#737373' : c.accent,
+              border: `1px solid ${isFinal ? '#404040' : hasScore ? '#404040' : c.accent}60`,
+            }}>
+            <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit' : hasScore ? 'Edit' : 'Score'}
+          </button>
         </div>
       </div>
     </div>
@@ -280,26 +307,23 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
 };
 
 // ---------- Score modal with PIN ----------
-const ScoreModal = ({ match, row, onSave, onClose }) => {
-  // Server-persisted score (what's in the DB right now)
+const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => {
   const [serverS1, setServerS1] = useState(row?.score1 ?? null);
   const [serverS2, setServerS2] = useState(row?.score2 ?? null);
-
-  // Local score (what the umpire is currently showing)
   const [s1, setS1] = useState(row?.score1 ?? 0);
   const [s2, setS2] = useState(row?.score2 ?? 0);
-
   const [pin, setPin] = useState('');
   const [pinLocked, setPinLocked] = useState(false);
-  const [mode, setMode] = useState('live'); // 'live' | 'final'
+  const [mode, setMode] = useState('live');
   const [err, setErr] = useState(null);
-  const [syncState, setSyncState] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [syncState, setSyncState] = useState('idle');
   const [finalS1, setFinalS1] = useState(row?.score1 ?? '');
   const [finalS2, setFinalS2] = useState(row?.score2 ?? '');
 
   const c = CAT_COLORS[match.cat] || CAT_COLORS.MS;
+  const displayP1 = resolvedP1 || match.p1;
+  const displayP2 = resolvedP2 || match.p2;
 
-  // Remember last-used PIN per match
   useEffect(() => {
     const saved = localStorage.getItem(`pin-${match.id}`);
     if (saved && saved.length === 4) {
@@ -308,22 +332,17 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     }
   }, [match.id]);
 
-  // Pick up realtime changes from other devices while modal is open — but only
-  // reflect them to local state if the user hasn't diverged (rare race condition).
   useEffect(() => {
     if (row?.score1 !== serverS1 || row?.score2 !== serverS2) {
       setServerS1(row?.score1 ?? null);
       setServerS2(row?.score2 ?? null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row?.score1, row?.score2]);
 
-  // Unlock PIN: verify by attempting a no-op save (current score → current score)
   const tryLockPin = async () => {
     setErr(null);
     if (pin.length !== 4) { setErr('Enter your 4-digit PIN'); return; }
     setSyncState('saving');
-    // Preserve existing is_final state during PIN verification (don't flip it)
     const result = await onSave(s1, s2, pin, !!row?.is_final);
     setSyncState('idle');
     if (result.ok) {
@@ -341,7 +360,6 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     localStorage.removeItem(`pin-${match.id}`);
   };
 
-  // Core save — used by every increment/decrement and the final-mode button
   const saveScore = async (newS1, newS2, isFinal = false) => {
     setErr(null);
     setSyncState('saving');
@@ -368,22 +386,17 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     const newS2 = which === 2 ? Math.max(0, s2 + delta) : s2;
     if (newS1 === s1 && newS2 === s2) return;
     setS1(newS1); setS2(newS2);
-    // Live increments: preserve current is_final state. Umpire may be editing a finished
-    // match (unlikely but possible) — don't silently un-finalize.
     saveScore(newS1, newS2, !!row?.is_final);
   };
 
   const markAsFinal = async () => {
     if (!pinLocked) return;
     if (s1 === 0 && s2 === 0) { setErr('Score is 0-0 — enter some points first'); return; }
-    
-    // Warn if prelim score exceeds expected limit
     const limit = row?.scoring_format || 21;
     const isPrelim = row?.match_type === 'prelim';
     if (isPrelim && (s1 > limit || s2 > limit)) {
       if (!confirm(`Score exceeds ${limit}-point prelim format. Mark complete anyway?`)) return;
     }
-    
     const ok = await saveScore(s1, s2, true);
     if (ok) onClose();
   };
@@ -395,7 +408,6 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     if (n1 == null || n2 == null || Number.isNaN(n1) || Number.isNaN(n2)) { setErr('Enter both scores'); return; }
     if (n1 === n2) { setErr('Scores must differ to mark as final'); return; }
     setS1(n1); setS2(n2);
-    // Final-score tab always marks as final (that's the point of that tab)
     const ok = await saveScore(n1, n2, true);
     if (ok) onClose();
   };
@@ -404,7 +416,6 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
     if (!pinLocked) return;
     if (!confirm('Clear both scores back to 0?')) return;
     setS1(0); setS2(0); setFinalS1(''); setFinalS2('');
-    // Reset also un-finalizes so the match returns to "in progress" state
     await saveScore(0, 0, false);
   };
 
@@ -415,19 +426,18 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
       <div className="relative w-full max-w-lg my-auto" style={{ backgroundColor: '#0a0a0a', border: `1px solid ${c.accent}` }}>
         <div className="absolute -top-px left-0 right-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${c.accent}, transparent)` }}></div>
 
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-neutral-800">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <CategoryBadge cat={match.cat} small />
               <span className="text-[11px] text-neutral-500 font-mono">{formatTime12h(match.time)} · COURT {match.court}</span>
             </div>
+            {match.label && <div className="text-xs text-amber-300 font-bold mb-1">{match.label}</div>}
             <div className="text-xs text-neutral-400 uppercase tracking-wider">Umpire · {match.umpire || '—'}</div>
           </div>
           <button onClick={onClose} className="text-neutral-500 hover:text-white"><X className="w-5 h-5" /></button>
         </div>
 
-        {/* PIN bar — shrinks after PIN is verified */}
         {!pinLocked ? (
           <div className="p-5 border-b border-neutral-800">
             <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-500 mb-2">
@@ -464,7 +474,6 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
           </div>
         )}
 
-        {/* Mode toggle */}
         {pinLocked && (
           <>
             <div className="flex border-b border-neutral-800">
@@ -488,7 +497,6 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
               </button>
             </div>
 
-            {/* Point limit indicator */}
             <div className="px-4 py-2 text-center text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-900">
               First to <span className="font-bold text-white">{row?.scoring_format || 21}</span> points
               {row?.match_type === 'prelim' && <span className="ml-2 text-neutral-600">· Prelim</span>}
@@ -498,23 +506,20 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
           </>
         )}
 
-        {/* Body */}
         {pinLocked && mode === 'live' && (
           <div className="p-4 sm:p-6">
             <div className="space-y-4">
-              <PlayerScorePanel name={match.p1} score={s1} isLeading={winnerAhead === 1}
+              <PlayerScorePanel name={displayP1} score={s1} isLeading={winnerAhead === 1}
                 onPlus={() => bump(1, +1)} onMinus={() => bump(1, -1)} color={c} />
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-px bg-neutral-800"></div>
                 <span className="text-[10px] text-neutral-600 font-mono tracking-widest">VS</span>
                 <div className="flex-1 h-px bg-neutral-800"></div>
               </div>
-              <PlayerScorePanel name={match.p2} score={s2} isLeading={winnerAhead === 2}
+              <PlayerScorePanel name={displayP2} score={s2} isLeading={winnerAhead === 2}
                 onPlus={() => bump(2, +1)} onMinus={() => bump(2, -1)} color={c} />
             </div>
 
-            {/* MARK COMPLETE — the big prominent action */}
-            {/* Warning for prelim scores exceeding 15 */}
             {row?.match_type === 'prelim' && (s1 > 15 || s2 > 15) && !row?.is_final && (
               <div className="mt-5 p-3 rounded bg-orange-950/50 border border-orange-800/50 text-orange-300 text-xs">
                 <div className="font-bold uppercase tracking-wider mb-1">⚠️ Score exceeds 15</div>
@@ -526,12 +531,12 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
               <button onClick={markAsFinal} disabled={syncState === 'saving' || (s1 === 0 && s2 === 0)}
                 className="w-full mt-5 py-4 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: c.accent, color: '#000' }}>
-                <Trophy className="w-4 h-4" /> Mark Complete — {winnerAhead === 1 ? match.p1 : winnerAhead === 2 ? match.p2 : 'Winner TBD'} {winnerAhead > 0 && 'wins'}
+                <Trophy className="w-4 h-4" /> Mark Complete — {winnerAhead === 1 ? displayP1 : winnerAhead === 2 ? displayP2 : 'Winner TBD'} {winnerAhead > 0 && 'wins'}
               </button>
             ) : (
               <div className="mt-5 rounded p-3 flex items-center justify-between" style={{ backgroundColor: '#0f1a0f', border: '1px solid #1f5f1f' }}>
                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest font-bold text-green-400">
-                  <Trophy className="w-4 h-4" /> Complete · {winnerAhead === 1 ? match.p1 : match.p2} wins
+                  <Trophy className="w-4 h-4" /> Complete · {winnerAhead === 1 ? displayP1 : displayP2} wins
                 </div>
                 <button onClick={async () => { await saveScore(s1, s2, false); }}
                   className="text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white transition-colors">
@@ -562,7 +567,7 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
             <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
               <div>
                 <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 1</div>
-                <div className="text-sm font-bold mb-3 text-white truncate">{match.p1}</div>
+                <div className="text-sm font-bold mb-3 text-white truncate">{displayP1}</div>
                 <input type="number" min="0" inputMode="numeric" value={finalS1} onChange={(e) => setFinalS1(e.target.value)}
                   className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
                   style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
@@ -570,7 +575,7 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
               <div className="text-neutral-600 font-mono text-xs pt-8">VS</div>
               <div>
                 <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 2</div>
-                <div className="text-sm font-bold mb-3 text-white truncate">{match.p2}</div>
+                <div className="text-sm font-bold mb-3 text-white truncate">{displayP2}</div>
                 <input type="number" min="0" inputMode="numeric" value={finalS2} onChange={(e) => setFinalS2(e.target.value)}
                   className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
                   style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
@@ -591,7 +596,6 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
   );
 };
 
-// Little sync indicator shown next to "PIN verified"
 const SyncBadge = ({ state }) => {
   if (state === 'saving') return <span className="text-neutral-400 uppercase tracking-widest">Syncing…</span>;
   if (state === 'saved') return <span className="text-green-400 uppercase tracking-widest flex items-center gap-1"><Check className="w-3 h-3" />Saved</span>;
@@ -599,7 +603,6 @@ const SyncBadge = ({ state }) => {
   return <span className="text-neutral-600 uppercase tracking-widest">Ready</span>;
 };
 
-// Big tap-to-score panel for live mode
 const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) => {
   return (
     <div className="p-3 rounded" style={{
@@ -612,9 +615,7 @@ const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) =>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <button
-          onClick={onMinus}
-          disabled={score === 0}
+        <button onClick={onMinus} disabled={score === 0}
           className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
           style={{ backgroundColor: '#1a1a1a', border: '1px solid #3f3f3f', color: '#a3a3a3' }}
           aria-label="Decrement">
@@ -623,8 +624,7 @@ const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) =>
         <div className="flex-1 text-center font-mono font-black tabular-nums text-6xl sm:text-7xl py-2" style={{ color: isLeading ? '#fff' : '#a3a3a3' }}>
           {score}
         </div>
-        <button
-          onClick={onPlus}
+        <button onClick={onPlus}
           className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center transition-all active:scale-95"
           style={{ backgroundColor: color.accent, color: '#000' }}
           aria-label="Increment">
@@ -635,8 +635,33 @@ const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) =>
   );
 };
 
+// ---------- Helper: resolve player names for playoff matches ----------
+const resolvePlayoffNames = (match, standings, matches) => {
+  if (!match.isPlayoff) return { p1: null, p2: null };
+  
+  const parentId = match.parentMatchId || match.id;
+  
+  // Semi-final: look up from PLAYOFF_STRUCTURE
+  if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
+    const structure = PLAYOFF_STRUCTURE[parentId];
+    const p1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
+    const p2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
+    return { p1, p2 };
+  }
+  
+  // Final: look up semi-final winners
+  if (match.matchType === 'final' && FINALS_STRUCTURE[parentId]) {
+    const structure = FINALS_STRUCTURE[parentId];
+    const p1 = getSemiWinner(matches, structure.semi1, standings);
+    const p2 = getSemiWinner(matches, structure.semi2, standings);
+    return { p1, p2 };
+  }
+  
+  return { p1: null, p2: null };
+};
+
 // ---------- Tabs ----------
-const ScheduleTab = ({ matches, now, onEdit, myPlayer }) => {
+const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
   const [catFilter, setCatFilter] = useState('ALL');
   const timeSlots = useMemo(() => [...new Set(SCHEDULE.map(m => m.time))].sort(), []);
   const filtered = catFilter === 'ALL' ? SCHEDULE : SCHEDULE.filter(m => m.cat === catFilter);
@@ -660,7 +685,6 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer }) => {
       {timeSlots.map(slot => {
         const slotMatches = filtered.filter(m => m.time === slot);
         if (slotMatches.length === 0) return null;
-        // Check if ANY match in this slot is actively being scored
         const hasLiveMatch = slotMatches.some(m => isMatchLive(matches[m.id], now));
         return (
           <div key={slot} className="mb-8">
@@ -679,7 +703,10 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer }) => {
               {slot === '16:00' && <div className="text-[10px] uppercase tracking-widest text-amber-400">Tea Break</div>}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {slotMatches.map(m => <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} />)}
+              {slotMatches.map(m => {
+                const { p1, p2 } = resolvePlayoffNames(m, standings, matches);
+                return <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} />;
+              })}
             </div>
           </div>
         );
@@ -688,8 +715,112 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer }) => {
   );
 };
 
-const StandingsTab = ({ matches }) => {
-  const standings = useMemo(() => calculateStandings(matches), [matches]);
+// Playoffs table for Standings tab
+const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
+  // Group the structures by category
+  const byCat = {};
+  Object.entries(structures).forEach(([id, info]) => {
+    if (!byCat[info.cat]) byCat[info.cat] = [];
+    byCat[info.cat].push({ id, ...info });
+  });
+
+  return (
+    <div className="mb-8">
+      <div className="text-lg font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+        <Trophy className="w-5 h-5 text-amber-400" />
+        {title}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.entries(byCat).map(([cat, items]) => {
+          const c = CAT_COLORS[cat];
+          return (
+            <div key={cat} style={{ backgroundColor: '#0a0a0a', border: `1px solid ${c.accent}40` }}>
+              <div className="px-4 py-3 border-b border-neutral-800 flex items-center gap-2">
+                <CategoryBadge cat={cat} small />
+                <div className="text-sm font-bold uppercase tracking-wider text-white">{CAT_LABELS[cat]}</div>
+              </div>
+              <div className="divide-y divide-neutral-900">
+                {items.map(item => {
+                  let p1Name, p2Name, winner;
+                  if (isSemi) {
+                    p1Name = resolveSemiSlot(standings, item.slot1, item.cat) || `${item.slot1.group}${item.slot1.rank > 1 ? ' #' + item.slot1.rank : ''}`;
+                    p2Name = resolveSemiSlot(standings, item.slot2, item.cat) || `${item.slot2.group}${item.slot2.rank > 1 ? ' #' + item.slot2.rank : ''}`;
+                    winner = getSemiWinner(matches, item.id, standings);
+                  } else {
+                    p1Name = getSemiWinner(matches, item.semi1, standings) || `Winner of ${item.semi1}`;
+                    p2Name = getSemiWinner(matches, item.semi2, standings) || `Winner of ${item.semi2}`;
+                    // Final winner
+                    let team1Sets = 0, team2Sets = 0;
+                    for (let setNum = 1; setNum <= 3; setNum++) {
+                      const row = matches[`${item.id}_s${setNum}`];
+                      if (row && row.is_final && row.score1 != null && row.score2 != null) {
+                        if (row.score1 > row.score2) team1Sets++;
+                        else if (row.score2 > row.score1) team2Sets++;
+                      }
+                    }
+                    winner = team1Sets >= 2 ? p1Name : team2Sets >= 2 ? p2Name : null;
+                  }
+
+                  // Get the 3 sets
+                  const sets = [1, 2, 3].map(setNum => {
+                    const row = matches[`${item.id}_s${setNum}`];
+                    return {
+                      setNum,
+                      score1: row?.score1 ?? null,
+                      score2: row?.score2 ?? null,
+                      isFinal: !!row?.is_final,
+                    };
+                  });
+
+                  return (
+                    <div key={item.id} className="p-3">
+                      <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-2">{item.label}</div>
+                      <div className="space-y-2">
+                        {/* Team 1 */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className={`text-sm ${winner === p1Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1`}>
+                            {winner === p1Name && '▸ '}{p1Name}
+                          </div>
+                          <div className="flex gap-1 font-mono font-bold tabular-nums">
+                            {sets.map(s => (
+                              <span key={s.setNum} className={`text-sm px-1.5 min-w-[24px] text-center ${s.score1 != null ? (s.score1 > s.score2 ? 'text-white bg-neutral-800' : 'text-neutral-500') : 'text-neutral-700'}`}>
+                                {s.score1 ?? '—'}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        {/* Team 2 */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className={`text-sm ${winner === p2Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1`}>
+                            {winner === p2Name && '▸ '}{p2Name}
+                          </div>
+                          <div className="flex gap-1 font-mono font-bold tabular-nums">
+                            {sets.map(s => (
+                              <span key={s.setNum} className={`text-sm px-1.5 min-w-[24px] text-center ${s.score2 != null ? (s.score2 > s.score1 ? 'text-white bg-neutral-800' : 'text-neutral-500') : 'text-neutral-700'}`}>
+                                {s.score2 ?? '—'}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {winner && (
+                        <div className="mt-2 text-[10px] uppercase tracking-widest font-bold text-green-400 flex items-center gap-1">
+                          <Trophy className="w-3 h-3" /> Winner · {winner}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const StandingsTab = ({ matches, standings }) => {
   const [activeCat, setActiveCat] = useState('MS');
   return (
     <div>
@@ -704,12 +835,18 @@ const StandingsTab = ({ matches }) => {
             }}>{CAT_LABELS[cat]}</button>
         ))}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {Object.entries(standings[activeCat]).map(([groupName, rows]) => (
+      
+      {/* Group standings */}
+      <div className="text-lg font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+        <BarChart3 className="w-5 h-5" style={{ color: CAT_COLORS[activeCat].accent }} />
+        Group Stage
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {Object.entries(standings[activeCat] || {}).map(([groupName, rows]) => (
           <div key={groupName} style={{ backgroundColor: '#0a0a0a', border: '1px solid #2a2a2a' }}>
             <div className="px-4 py-3 border-b border-neutral-800 flex items-center gap-2">
               <CategoryBadge cat={activeCat} small />
-              <div className="text-sm font-bold uppercase tracking-wider text-white">Group {groupName}</div>
+              <div className="text-sm font-bold uppercase tracking-wider text-white">{groupName}</div>
             </div>
             <table className="w-full text-sm">
               <thead>
@@ -745,81 +882,29 @@ const StandingsTab = ({ matches }) => {
           </div>
         ))}
       </div>
+
+      {/* Semi-Finals for active category */}
+      <PlayoffsTable 
+        structures={Object.fromEntries(Object.entries(PLAYOFF_STRUCTURE).filter(([_, v]) => v.cat === activeCat))}
+        matches={matches}
+        standings={standings}
+        isSemi={true}
+        title="Semi-Finals (Best of 3 Sets)"
+      />
+      
+      {/* Finals for active category */}
+      <PlayoffsTable 
+        structures={Object.fromEntries(Object.entries(FINALS_STRUCTURE).filter(([_, v]) => v.cat === activeCat))}
+        matches={matches}
+        standings={standings}
+        isSemi={false}
+        title="Finals (Best of 3 Sets)"
+      />
     </div>
   );
 };
 
-const BracketsTab = ({ matches }) => {
-  const playoffs = SCHEDULE.filter(m => m.isPlayoff);
-  const byCat = {};
-  playoffs.forEach(m => {
-    if (!byCat[m.cat]) byCat[m.cat] = { semis: [], finals: [] };
-    if (m.stage === 'Semi') byCat[m.cat].semis.push(m); else byCat[m.cat].finals.push(m);
-  });
-  return (
-    <div className="space-y-8">
-      {Object.entries(byCat).map(([cat, { semis, finals }]) => {
-        const c = CAT_COLORS[cat];
-        return (
-          <div key={cat} style={{ backgroundColor: '#0a0a0a', border: `1px solid ${c.accent}30` }}>
-            <div className="px-5 py-3 border-b border-neutral-800 flex items-center gap-3">
-              <CategoryBadge cat={cat} />
-              <div className="text-lg font-bold text-white">{CAT_LABELS[cat]}</div>
-              <div className="flex-1"></div>
-              <Trophy className="w-4 h-4" style={{ color: c.accent }} />
-            </div>
-            <div className="p-5">
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
-                <div className="space-y-3">
-                  <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-2">Semifinals</div>
-                  {semis.map(m => {
-                    const row = matches[m.id];
-                    return (
-                      <div key={m.id} className="p-3" style={{ backgroundColor: '#131313', border: '1px solid #2a2a2a' }}>
-                        <div className="text-[10px] text-neutral-500 font-mono mb-1.5">{formatTime12h(m.time)} · COURT {m.court}</div>
-                        <div className="text-sm text-neutral-300">{m.label}</div>
-                        {row?.score1 != null && row?.score2 != null && (
-                          <div className="mt-1 font-mono font-bold" style={{ color: c.accent }}>{row.score1} — {row.score2}</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="hidden md:flex flex-col items-center">
-                  <svg width="40" height="100" viewBox="0 0 40 100">
-                    <path d="M 0 20 L 20 20 L 20 80 L 0 80" stroke={c.accent} strokeOpacity="0.5" fill="none" strokeWidth="1" />
-                    <path d="M 20 50 L 40 50" stroke={c.accent} strokeOpacity="0.5" fill="none" strokeWidth="1" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-2">Final</div>
-                  {finals.map(m => {
-                    const row = matches[m.id];
-                    return (
-                      <div key={m.id} className="p-4" style={{ backgroundColor: '#131313', border: `1px solid ${c.accent}60`, boxShadow: `0 0 20px ${c.accent}20` }}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Trophy className="w-3 h-3" style={{ color: c.accent }} />
-                          <div className="text-[10px] uppercase tracking-widest font-bold" style={{ color: c.accent }}>Championship</div>
-                        </div>
-                        <div className="text-[10px] text-neutral-500 font-mono mb-1.5">{formatTime12h(m.time)} · COURT {m.court}</div>
-                        <div className="text-sm text-white font-bold">{m.label}</div>
-                        {row?.score1 != null && row?.score2 != null && (
-                          <div className="mt-2 font-mono font-bold text-xl" style={{ color: c.accent }}>{row.score1} — {row.score2}</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer }) => {
+const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }) => {
   const my = myPlayer ? SCHEDULE.filter(m => matchInvolvesPlayer(m, myPlayer)) : [];
   const playing = my.filter(m => {
     const check = (f) => f && (f.toLowerCase().includes(myPlayer.toLowerCase())
@@ -850,12 +935,15 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer }) => {
                 <div className="text-xs text-neutral-500 font-mono">· {playing.length} {playing.length === 1 ? 'match' : 'matches'}</div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {playing.map(m => (
-                  <div key={m.id}>
-                    <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
-                    <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} />
-                  </div>
-                ))}
+                {playing.map(m => {
+                  const { p1, p2 } = resolvePlayoffNames(m, standings, matches);
+                  return (
+                    <div key={m.id}>
+                      <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
+                      <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -866,12 +954,15 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer }) => {
                 <div className="text-xs text-neutral-500 font-mono">· {umpiring.length} {umpiring.length === 1 ? 'match' : 'matches'}</div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {umpiring.map(m => (
-                  <div key={m.id}>
-                    <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
-                    <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} />
-                  </div>
-                ))}
+                {umpiring.map(m => {
+                  const { p1, p2 } = resolvePlayoffNames(m, standings, matches);
+                  return (
+                    <div key={m.id}>
+                      <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
+                      <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -900,13 +991,19 @@ export default function TournamentApp() {
     if (v) localStorage.setItem('my-player', v); else localStorage.removeItem('my-player');
   };
 
+  const standings = useMemo(() => calculateStandings(matches), [matches]);
+
   const handleSave = async (s1, s2, pin, isFinal = false) => {
     if (!editing) return { ok: false, error: 'No match selected' };
     return await updateScore(editing.id, s1, s2, pin, isFinal);
   };
 
-  const completed = Object.values(matches).filter(r => r.is_final && !r.is_playoff).length;
+  // Count completed prelim matches (non-playoff, marked as final)
+  const completed = SCHEDULE.filter(m => !m.isPlayoff && matches[m.id]?.is_final).length;
   const totalNonPlayoff = SCHEDULE.filter(m => !m.isPlayoff).length;
+
+  // Get resolved names for the currently editing match
+  const editingResolved = editing ? resolvePlayoffNames(editing, standings, matches) : { p1: null, p2: null };
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: '#050505' }}>
@@ -954,7 +1051,6 @@ export default function TournamentApp() {
           {[
             { id: 'schedule', icon: Calendar, label: 'Schedule' },
             { id: 'standings', icon: BarChart3, label: 'Standings' },
-            { id: 'brackets', icon: Trophy, label: 'Brackets' },
             { id: 'my', icon: User, label: 'My Matches' },
             { id: 'rules', icon: BookOpen, label: 'Rules' },
           ].map(tab => {
@@ -978,10 +1074,9 @@ export default function TournamentApp() {
           <div className="text-center text-neutral-500 py-20">Loading tournament data…</div>
         ) : (
           <>
-            {activeTab === 'schedule' && <ScheduleTab matches={matches} now={now} onEdit={setEditing} myPlayer={myPlayer} />}
-            {activeTab === 'standings' && <StandingsTab matches={matches} />}
-            {activeTab === 'brackets' && <BracketsTab matches={matches} />}
-            {activeTab === 'my' && <MyMatchesTab matches={matches} now={now} onEdit={setEditing} myPlayer={myPlayer} setMyPlayer={setMyPlayer} />}
+            {activeTab === 'schedule' && <ScheduleTab matches={matches} now={now} onEdit={setEditing} myPlayer={myPlayer} standings={standings} />}
+            {activeTab === 'standings' && <StandingsTab matches={matches} standings={standings} />}
+            {activeTab === 'my' && <MyMatchesTab matches={matches} now={now} onEdit={setEditing} myPlayer={myPlayer} setMyPlayer={setMyPlayer} standings={standings} />}
             {activeTab === 'rules' && <Rules />}
           </>
         )}
@@ -989,17 +1084,13 @@ export default function TournamentApp() {
 
       <footer className="border-t border-neutral-900 mt-12 py-8">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
-          {/* Tournament info block */}
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 md:gap-8 items-start">
-            {/* Poster thumbnail */}
             <a href="/tournament-poster.jpg" target="_blank" rel="noopener noreferrer"
                className="block shrink-0 transition-opacity hover:opacity-80"
                title="View full poster">
               <img src="/tournament-poster.jpg" alt="MTCSV Yuvajana Sakhyam Badminton Tournament poster"
                    className="w-full md:w-48 h-auto rounded" style={{ border: '1px solid #2a2a2a' }} />
             </a>
-
-            {/* Info text */}
             <div className="flex-1">
               <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500 mb-2">
                 MTCSV Yuvajana Sakhyam Presents
@@ -1010,7 +1101,6 @@ export default function TournamentApp() {
               <div className="text-sm text-amber-300/80 italic mb-4 font-serif">
                 "Serve for His Glory!"
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-neutral-300">
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">When</div>
@@ -1031,8 +1121,6 @@ export default function TournamentApp() {
               </div>
             </div>
           </div>
-
-          {/* Bottom strip */}
           <div className="mt-8 pt-4 border-t border-neutral-900 flex items-center justify-between text-[10px] text-neutral-600 uppercase tracking-widest">
             <span>Per-match umpire PINs · Admin override available</span>
             <span>Realtime · Supabase</span>
@@ -1040,7 +1128,7 @@ export default function TournamentApp() {
         </div>
       </footer>
 
-      {editing && <ScoreModal match={editing} row={matches[editing.id]} onSave={handleSave} onClose={() => setEditing(null)} />}
+      {editing && <ScoreModal match={editing} row={matches[editing.id]} onSave={handleSave} onClose={() => setEditing(null)} resolvedP1={editingResolved.p1} resolvedP2={editingResolved.p2} />}
     </div>
   );
 }
