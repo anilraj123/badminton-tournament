@@ -44,6 +44,22 @@ const matchInvolvesPlayer = (match, p) => {
   return false;
 };
 
+// ---------- Override helper ----------
+// Check if any of the 3 sets of a parent playoff match has an override set.
+// Returns { p1, p2 } if override exists on any set, otherwise null.
+const getPlayoffOverride = (matches, parentId) => {
+  for (let setNum = 1; setNum <= 3; setNum++) {
+    const sibling = matches[`${parentId}_s${setNum}`];
+    if (sibling && (sibling.override_p1 || sibling.override_p2)) {
+      return {
+        p1: sibling.override_p1 || null,
+        p2: sibling.override_p2 || null,
+      };
+    }
+  }
+  return null;
+};
+
 // ---------- data hook ----------
 function useMatches() {
   const [matches, setMatches] = useState({});
@@ -170,15 +186,21 @@ const resolveSemiSlot = (standings, slotInfo, cat) => {
 
 // Calculate the winner of a semi-final based on 3-set scores
 // Returns the winning team name, or null if not yet determined
+// Checks override first, then falls back to auto-resolution from group standings
 const getSemiWinner = (matches, semiId, standings) => {
   const structure = PLAYOFF_STRUCTURE[semiId];
   if (!structure) return null;
-  
-  // Get the actual team names for slot1 and slot2
-  const team1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
-  const team2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
+
+  // STEP 1: Check for manual override on any of the 3 sets
+  const override = getPlayoffOverride(matches, semiId);
+  let team1 = override ? override.p1 : null;
+  let team2 = override ? override.p2 : null;
+
+  // STEP 2: Fall back to auto-resolution from group standings
+  if (!team1) team1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
+  if (!team2) team2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
   if (!team1 || !team2) return null;
-  
+
   // Count sets won by each team
   let team1Sets = 0, team2Sets = 0;
   for (let setNum = 1; setNum <= 3; setNum++) {
@@ -188,7 +210,7 @@ const getSemiWinner = (matches, semiId, standings) => {
       else if (row.score2 > row.score1) team2Sets++;
     }
   }
-  
+
   if (team1Sets >= 2) return team1;
   if (team2Sets >= 2) return team2;
   return null;
@@ -641,27 +663,36 @@ const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) =>
 };
 
 // ---------- Helper: resolve player names for playoff matches ----------
+// Order of precedence:
+//   1. Manual override (override_p1 / override_p2 on any of the 3 sets)
+//   2. Auto-resolution from group standings (semis) or semi winners (finals)
 const resolvePlayoffNames = (match, standings, matches) => {
   if (!match.isPlayoff) return { p1: null, p2: null };
-  
+
   const parentId = match.parentMatchId || match.id;
-  
-  // Semi-final: look up from PLAYOFF_STRUCTURE
+
+  // STEP 1: Check for manual override on any of the 3 sets
+  const override = getPlayoffOverride(matches, parentId);
+  if (override) {
+    return { p1: override.p1, p2: override.p2 };
+  }
+
+  // STEP 2: Auto-resolve from PLAYOFF_STRUCTURE (for semis)
   if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
     const structure = PLAYOFF_STRUCTURE[parentId];
     const p1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
     const p2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
     return { p1, p2 };
   }
-  
-  // Final: look up semi-final winners
+
+  // STEP 3: Auto-resolve from semi-final winners (for finals)
   if (match.matchType === 'final' && FINALS_STRUCTURE[parentId]) {
     const structure = FINALS_STRUCTURE[parentId];
     const p1 = getSemiWinner(matches, structure.semi1, standings);
     const p2 = getSemiWinner(matches, structure.semi2, standings);
     return { p1, p2 };
   }
-  
+
   return { p1: null, p2: null };
 };
 
@@ -747,13 +778,19 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
               <div className="divide-y divide-neutral-900">
                 {items.map(item => {
                   let p1Name, p2Name, winner;
+
+                  // Check for manual override first (applies to both semis and finals)
+                  const override = getPlayoffOverride(matches, item.id);
+                  const overrideP1 = override ? override.p1 : null;
+                  const overrideP2 = override ? override.p2 : null;
+
                   if (isSemi) {
-                    p1Name = resolveSemiSlot(standings, item.slot1, item.cat) || `${item.slot1.group}${item.slot1.rank > 1 ? ' #' + item.slot1.rank : ''}`;
-                    p2Name = resolveSemiSlot(standings, item.slot2, item.cat) || `${item.slot2.group}${item.slot2.rank > 1 ? ' #' + item.slot2.rank : ''}`;
+                    p1Name = overrideP1 || resolveSemiSlot(standings, item.slot1, item.cat) || `${item.slot1.group}${item.slot1.rank > 1 ? ' #' + item.slot1.rank : ''}`;
+                    p2Name = overrideP2 || resolveSemiSlot(standings, item.slot2, item.cat) || `${item.slot2.group}${item.slot2.rank > 1 ? ' #' + item.slot2.rank : ''}`;
                     winner = getSemiWinner(matches, item.id, standings);
                   } else {
-                    p1Name = getSemiWinner(matches, item.semi1, standings) || `Winner of ${item.semi1}`;
-                    p2Name = getSemiWinner(matches, item.semi2, standings) || `Winner of ${item.semi2}`;
+                    p1Name = overrideP1 || getSemiWinner(matches, item.semi1, standings) || `Winner of ${item.semi1}`;
+                    p2Name = overrideP2 || getSemiWinner(matches, item.semi2, standings) || `Winner of ${item.semi2}`;
                     // Final winner
                     let team1Sets = 0, team2Sets = 0;
                     for (let setNum = 1; setNum <= 3; setNum++) {
@@ -779,7 +816,15 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
 
                   return (
                     <div key={item.id} className="p-3">
-                      <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-2">{item.label}</div>
+                      <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-2 flex items-center gap-2">
+                        <span>{item.label}</span>
+                        {override && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider"
+                                style={{ backgroundColor: '#7c2d12', color: '#fed7aa', border: '1px solid #ea580c' }}>
+                            OVERRIDE
+                          </span>
+                        )}
+                      </div>
                       <div className="space-y-2">
                         {/* Team 1 */}
                         <div className="flex items-center justify-between gap-2">
