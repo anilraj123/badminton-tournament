@@ -209,7 +209,15 @@ const CourtCard = ({ court, match, matches, isLive }) => {
          style={{ border: `3px solid ${isFinal ? '#15803d' : isLive ? c.accent : '#e2e8f0'}` }}>
       {/* Top strip */}
       <div className="px-5 py-3 flex items-center justify-between" style={{ backgroundColor: c.soft }}>
-        <div className="text-xl font-black tracking-widest" style={{ color: c.text }}>COURT {court}</div>
+        <div className="flex items-center gap-3">
+          <div className="text-xl font-black tracking-widest" style={{ color: c.text }}>COURT {court}</div>
+          {row?.match_type && row.match_type !== 'prelim' && (
+            <div className="text-sm font-bold tracking-wider px-2 py-0.5 rounded"
+                 style={{ backgroundColor: row.match_type === 'semi' ? '#854d0e' : '#7c2d12', color: '#fff' }}>
+              {row.match_type === 'semi' ? 'SEMI' : 'FINAL'}
+            </div>
+          )}
+        </div>
         <div className="text-base font-bold tracking-widest px-2.5 py-0.5 rounded" style={{ backgroundColor: c.accent, color: '#fff' }}>
           {match.cat}
         </div>
@@ -233,7 +241,7 @@ const CourtCard = ({ court, match, matches, isLive }) => {
         </div>
         {isFinal && winnerName && (
           <div className="text-sm font-bold text-emerald-600 tracking-wider uppercase flex items-center gap-2">
-            <span className="text-emerald-500">🏆</span> Final · {winnerName} wins
+            <span className="text-emerald-500">🏆</span> Complete · {winnerName} wins
           </div>
         )}
       </div>

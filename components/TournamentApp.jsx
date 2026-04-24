@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff, Plus, Minus, RotateCcw } from 'lucide-react';
+import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff, Plus, Minus, RotateCcw, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES } from '../lib/tournament-data';
+import Rules from './Rules';
 
 const CAT_COLORS = {
   MS:  { bg: '#1e3a5f', text: '#a8d0ff', accent: '#4a9eff' },
@@ -208,13 +209,19 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
       {isFinal && (
         <div className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold tracking-widest flex items-center gap-1"
              style={{ backgroundColor: '#15803d', color: '#fff' }}>
-          <Check className="w-2.5 h-2.5" strokeWidth={3} /> FINAL
+          <Check className="w-2.5 h-2.5" strokeWidth={3} /> COMPLETE
         </div>
       )}
       <div className="p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <CategoryBadge cat={match.cat} small />
+            {row?.match_type && row.match_type !== 'prelim' && (
+              <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: row.match_type === 'semi' ? '#854d0e' : '#7c2d12', color: '#fff' }}>
+                {row.match_type === 'semi' ? 'Semi' : 'Final'}
+              </span>
+            )}
             {match.isPlayoff && <span className="text-[10px] font-bold tracking-widest uppercase text-yellow-400">{match.stage}</span>}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-neutral-500 font-mono">
@@ -262,7 +269,7 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer }) => {
                 color: isFinal ? '#737373' : hasScore ? '#737373' : c.accent,
                 border: `1px solid ${isFinal ? '#404040' : hasScore ? '#404040' : c.accent}60`,
               }}>
-              <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit Final' : hasScore ? 'Edit' : 'Score'}
+              <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit' : hasScore ? 'Edit' : 'Score'}
             </button>
           )}
         </div>
@@ -368,6 +375,14 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
   const markAsFinal = async () => {
     if (!pinLocked) return;
     if (s1 === 0 && s2 === 0) { setErr('Score is 0-0 — enter some points first'); return; }
+    
+    // Warn if prelim score exceeds expected limit
+    const limit = row?.scoring_format || 21;
+    const isPrelim = row?.match_type === 'prelim';
+    if (isPrelim && (s1 > limit || s2 > limit)) {
+      if (!confirm(`Score exceeds ${limit}-point prelim format. Mark complete anyway?`)) return;
+    }
+    
     const ok = await saveScore(s1, s2, true);
     if (ok) onClose();
   };
@@ -450,26 +465,36 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
 
         {/* Mode toggle */}
         {pinLocked && (
-          <div className="flex border-b border-neutral-800">
-            <button onClick={() => setMode('live')}
-              className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
-              style={{
-                backgroundColor: mode === 'live' ? '#131313' : 'transparent',
-                color: mode === 'live' ? c.accent : '#737373',
-                borderBottom: `2px solid ${mode === 'live' ? c.accent : 'transparent'}`,
-              }}>
-              Live Scoring
-            </button>
-            <button onClick={() => setMode('final')}
-              className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
-              style={{
-                backgroundColor: mode === 'final' ? '#131313' : 'transparent',
-                color: mode === 'final' ? c.accent : '#737373',
-                borderBottom: `2px solid ${mode === 'final' ? c.accent : 'transparent'}`,
-              }}>
-              Final Score
-            </button>
-          </div>
+          <>
+            <div className="flex border-b border-neutral-800">
+              <button onClick={() => setMode('live')}
+                className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
+                style={{
+                  backgroundColor: mode === 'live' ? '#131313' : 'transparent',
+                  color: mode === 'live' ? c.accent : '#737373',
+                  borderBottom: `2px solid ${mode === 'live' ? c.accent : 'transparent'}`,
+                }}>
+                Live Scoring
+              </button>
+              <button onClick={() => setMode('final')}
+                className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
+                style={{
+                  backgroundColor: mode === 'final' ? '#131313' : 'transparent',
+                  color: mode === 'final' ? c.accent : '#737373',
+                  borderBottom: `2px solid ${mode === 'final' ? c.accent : 'transparent'}`,
+                }}>
+                Final Score
+              </button>
+            </div>
+
+            {/* Point limit indicator */}
+            <div className="px-4 py-2 text-center text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-900">
+              First to <span className="font-bold text-white">{row?.scoring_format || 21}</span> points
+              {row?.match_type === 'prelim' && <span className="ml-2 text-neutral-600">· Prelim</span>}
+              {row?.match_type === 'semi' && <span className="ml-2 text-yellow-600">· Semi-Final</span>}
+              {row?.match_type === 'final' && <span className="ml-2 text-yellow-600">· Championship</span>}
+            </div>
+          </>
         )}
 
         {/* Body */}
@@ -487,21 +512,29 @@ const ScoreModal = ({ match, row, onSave, onClose }) => {
                 onPlus={() => bump(2, +1)} onMinus={() => bump(2, -1)} color={c} />
             </div>
 
-            {/* MARK AS FINAL — the big prominent action */}
+            {/* MARK COMPLETE — the big prominent action */}
+            {/* Warning for prelim scores exceeding 15 */}
+            {row?.match_type === 'prelim' && (s1 > 15 || s2 > 15) && !row?.is_final && (
+              <div className="mt-5 p-3 rounded bg-orange-950/50 border border-orange-800/50 text-orange-300 text-xs">
+                <div className="font-bold uppercase tracking-wider mb-1">⚠️ Score exceeds 15</div>
+                <div className="text-orange-400/80">Prelims are first to 15 points. Consider marking complete if this is the final score.</div>
+              </div>
+            )}
+
             {!row?.is_final ? (
               <button onClick={markAsFinal} disabled={syncState === 'saving' || (s1 === 0 && s2 === 0)}
                 className="w-full mt-5 py-4 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: c.accent, color: '#000' }}>
-                <Trophy className="w-4 h-4" /> Mark as Final — {winnerAhead === 1 ? match.p1 : winnerAhead === 2 ? match.p2 : 'Winner TBD'} {winnerAhead > 0 && 'wins'}
+                <Trophy className="w-4 h-4" /> Mark Complete — {winnerAhead === 1 ? match.p1 : winnerAhead === 2 ? match.p2 : 'Winner TBD'} {winnerAhead > 0 && 'wins'}
               </button>
             ) : (
               <div className="mt-5 rounded p-3 flex items-center justify-between" style={{ backgroundColor: '#0f1a0f', border: '1px solid #1f5f1f' }}>
                 <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest font-bold text-green-400">
-                  <Trophy className="w-4 h-4" /> Final · {winnerAhead === 1 ? match.p1 : match.p2} wins
+                  <Trophy className="w-4 h-4" /> Complete · {winnerAhead === 1 ? match.p1 : match.p2} wins
                 </div>
                 <button onClick={async () => { await saveScore(s1, s2, false); }}
                   className="text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white transition-colors">
-                  Undo final
+                  Undo complete
                 </button>
               </div>
             )}
@@ -934,6 +967,7 @@ export default function TournamentApp() {
             { id: 'standings', icon: BarChart3, label: 'Standings' },
             { id: 'brackets', icon: Trophy, label: 'Brackets' },
             { id: 'my', icon: User, label: 'My Matches' },
+            { id: 'rules', icon: BookOpen, label: 'Rules' },
           ].map(tab => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -959,6 +993,7 @@ export default function TournamentApp() {
             {activeTab === 'standings' && <StandingsTab matches={matches} />}
             {activeTab === 'brackets' && <BracketsTab matches={matches} />}
             {activeTab === 'my' && <MyMatchesTab matches={matches} liveSlot={liveSlot} onEdit={setEditing} myPlayer={myPlayer} setMyPlayer={setMyPlayer} />}
+            {activeTab === 'rules' && <Rules />}
           </>
         )}
       </main>
