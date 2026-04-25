@@ -45,6 +45,16 @@ const namesMatch = (groupPlayer, schedulePlayer) => {
   return false;
 };
 
+// Returns true only when every prelim match in a category has been scored as
+// final. Used to hold off on resolving semi names until prelims for that
+// category are fully done — otherwise mid-tournament the displayed semifinalist
+// flips around as the leaderboard shifts.
+const arePrelimsComplete = (cat, matches) => {
+  const prelims = SCHEDULE.filter(m => !m.isPlayoff && m.cat === cat);
+  if (prelims.length === 0) return true;
+  return prelims.every(m => !!matches[m.id]?.is_final);
+};
+
 const calculateStandings = (matches) => {
   const st = {};
   Object.entries(GROUPS).forEach(([cat, groups]) => {
@@ -109,6 +119,10 @@ const getSemiWinner = (matches, semiId, standings) => {
   const override = getPlayoffOverride(matches, semiId);
   let team1 = override ? override.p1 : null;
   let team2 = override ? override.p2 : null;
+  // Fall back to auto-resolution from standings only after all prelims for
+  // this category are scored. Otherwise standings are mid-shift and would
+  // produce a fictitious semi winner that cascades into the Final.
+  if ((!team1 || !team2) && !arePrelimsComplete(structure.cat, matches)) return null;
   if (!team1) team1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
   if (!team2) team2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
   if (!team1 || !team2) return null;
@@ -125,6 +139,11 @@ const getSemiWinner = (matches, semiId, standings) => {
   return null;
 };
 
+// Resolve display names for a playoff match.
+// Override always wins. Otherwise:
+//   - Semi: only resolve actual names if all prelims for the category are
+//     done; until then, fall back to the schedule placeholder.
+//   - Final: pulls from semi winners (which are themselves gated above).
 const resolvePlayoffNames = (match, standings, matches) => {
   if (!match.isPlayoff) return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
   const parentId = match.parentMatchId || match.id;
@@ -132,6 +151,9 @@ const resolvePlayoffNames = (match, standings, matches) => {
   if (override) return { p1: override.p1 || match.p1, p2: override.p2 || match.p2, p1Tied: false, p2Tied: false };
   if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
     const s = PLAYOFF_STRUCTURE[parentId];
+    if (!arePrelimsComplete(s.cat, matches)) {
+      return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
+    }
     const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat);
     const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat);
     return {
@@ -294,6 +316,9 @@ const CategoryColumn = ({ cat, standings, matches }) => {
   const groups = standings[cat] || {};
   const semiEntries = Object.entries(PLAYOFF_STRUCTURE).filter(([_, v]) => v.cat === cat);
   const finalEntry = Object.entries(FINALS_STRUCTURE).find(([_, v]) => v.cat === cat);
+  // Once prelims for this category are complete we can resolve actual semi
+  // names; until then only overrides drive the playoff strip.
+  const prelimsDone = arePrelimsComplete(cat, matches);
 
   let champion = null;
   let finalScoresStr = null;
@@ -369,17 +394,20 @@ const CategoryColumn = ({ cat, standings, matches }) => {
           {semiEntries.map(([semiId, semiInfo]) => {
             const winner = getSemiWinner(matches, semiId, standings);
             const override = getPlayoffOverride(matches, semiId);
+            // Only auto-resolve names once prelims are done. Override always
+            // wins. Until prelims complete, leave names null so we render an
+            // em-dash placeholder rather than a flickering top-of-leaderboard.
             let p1, p2, p1IsTied = false, p2IsTied = false;
             if (override?.p1) {
               p1 = override.p1;
-            } else {
+            } else if (prelimsDone) {
               const a1 = resolveSemiSlotAll(standings, semiInfo.slot1, cat);
               p1 = a1 ? a1.names.join(' / ') : null;
               p1IsTied = !!(a1 && a1.tied);
             }
             if (override?.p2) {
               p2 = override.p2;
-            } else {
+            } else if (prelimsDone) {
               const a2 = resolveSemiSlotAll(standings, semiInfo.slot2, cat);
               p2 = a2 ? a2.names.join(' / ') : null;
               p2IsTied = !!(a2 && a2.tied);

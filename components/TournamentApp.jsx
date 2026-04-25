@@ -141,6 +141,17 @@ const namesMatch = (groupPlayer, schedulePlayer) => {
   return false;
 };
 
+// Returns true if every non-playoff (prelim) match in a category has been
+// scored as final. Used to gate semi-final name resolution so the schedule
+// stays as "Group A #1" placeholders until prelims for that category are
+// fully done — otherwise mid-tournament rank shuffling makes the displayed
+// semifinalist flip around as more matches come in.
+const arePrelimsComplete = (cat, matches) => {
+  const prelims = SCHEDULE.filter(m => !m.isPlayoff && m.cat === cat);
+  if (prelims.length === 0) return true;
+  return prelims.every(m => !!matches[m.id]?.is_final);
+};
+
 const calculateStandings = (matches) => {
   const st = {};
   Object.entries(GROUPS).forEach(([cat, groups]) => {
@@ -232,7 +243,11 @@ const getSemiWinner = (matches, semiId, standings) => {
   let team1 = override ? override.p1 : null;
   let team2 = override ? override.p2 : null;
 
-  // STEP 2: Fall back to auto-resolution from group standings
+  // STEP 2: Fall back to auto-resolution from group standings — but only after
+  // all prelims for this category are scored. Otherwise the standings are still
+  // shifting and we'd report a fictitious semi winner that cascades into the
+  // Final's auto-resolution.
+  if ((!team1 || !team2) && !arePrelimsComplete(structure.cat, matches)) return null;
   if (!team1) team1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
   if (!team2) team2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
   if (!team1 || !team2) return null;
@@ -711,6 +726,10 @@ const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) =>
 //   2. Auto-resolution from group standings (semis) or semi winners (finals)
 // Returns { p1, p2, p1Tied, p2Tied } where pX is a display string and pXTied
 // is true if the slot is tied between multiple players (joined by " / ").
+//
+// Semi auto-resolution waits until ALL prelims for the category are complete —
+// otherwise the displayed semifinalist would flip around as the leaderboard
+// shifts mid-tournament. Until then we fall back to the schedule placeholder.
 const resolvePlayoffNames = (match, standings, matches) => {
   if (!match.isPlayoff) return { p1: null, p2: null, p1Tied: false, p2Tied: false };
 
@@ -722,9 +741,14 @@ const resolvePlayoffNames = (match, standings, matches) => {
     return { p1: override.p1, p2: override.p2, p1Tied: false, p2Tied: false };
   }
 
-  // STEP 2: Auto-resolve from PLAYOFF_STRUCTURE (for semis) — surface ties
+  // STEP 2: Auto-resolve from PLAYOFF_STRUCTURE (for semis) — surface ties.
+  // Wait until ALL prelims in this category are complete; otherwise leave the
+  // schedule placeholder in place (caller falls back to match.p1 / match.p2).
   if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
     const s = PLAYOFF_STRUCTURE[parentId];
+    if (!arePrelimsComplete(s.cat, matches)) {
+      return { p1: null, p2: null, p1Tied: false, p2Tied: false };
+    }
     const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat);
     const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat);
     return {
@@ -834,11 +858,15 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                   const overrideP1 = override ? override.p1 : null;
                   const overrideP2 = override ? override.p2 : null;
 
+                  // For semis we also gate auto-resolution on prelims being
+                  // complete; otherwise show the schedule placeholder.
+                  const prelimsDone = arePrelimsComplete(item.cat, matches);
+
                   let p1Tied = false, p2Tied = false;
                   if (isSemi) {
                     if (overrideP1) {
                       p1Name = overrideP1;
-                    } else {
+                    } else if (prelimsDone) {
                       const a1 = resolveSemiSlotAll(standings, item.slot1, item.cat);
                       if (a1) {
                         p1Name = a1.names.join(' / ');
@@ -846,10 +874,12 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                       } else {
                         p1Name = `${item.slot1.group}${item.slot1.rank > 1 ? ' #' + item.slot1.rank : ''}`;
                       }
+                    } else {
+                      p1Name = `${item.slot1.group}${item.slot1.rank > 1 ? ' #' + item.slot1.rank : ''}`;
                     }
                     if (overrideP2) {
                       p2Name = overrideP2;
-                    } else {
+                    } else if (prelimsDone) {
                       const a2 = resolveSemiSlotAll(standings, item.slot2, item.cat);
                       if (a2) {
                         p2Name = a2.names.join(' / ');
@@ -857,6 +887,8 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                       } else {
                         p2Name = `${item.slot2.group}${item.slot2.rank > 1 ? ' #' + item.slot2.rank : ''}`;
                       }
+                    } else {
+                      p2Name = `${item.slot2.group}${item.slot2.rank > 1 ? ' #' + item.slot2.rank : ''}`;
                     }
                     winner = getSemiWinner(matches, item.id, standings);
                   } else {
