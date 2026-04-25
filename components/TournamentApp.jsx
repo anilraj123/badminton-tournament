@@ -183,6 +183,29 @@ const resolveSemiSlot = (standings, slotInfo, cat) => {
   const entry = groupStandings[slotInfo.rank - 1];
   return entry && entry.played > 0 ? entry.name : null;
 };
+// Returns all names tied at a given slot's rank, based on (won, diff) equality
+// with the entry currently at slotInfo.rank. Returns null if the slot has no
+// played matches yet, or { names: [...], tied: bool } otherwise.
+const resolveSemiSlotAll = (standings, slotInfo, cat) => {
+  if (!slotInfo || !standings[cat]) return null;
+  const groupStandings = standings[cat][slotInfo.group];
+  if (!groupStandings || groupStandings.length < slotInfo.rank) return null;
+  const target = groupStandings[slotInfo.rank - 1];
+  if (!target || target.played === 0) return null;
+  const targetWon = target.won;
+  const targetDiff = target.pointsFor - target.pointsAgainst;
+  // Collect all entries sharing the same (won, diff) within the group
+  const tied = groupStandings.filter(e => {
+    if (e.played === 0) return false;
+    return e.won === targetWon && (e.pointsFor - e.pointsAgainst) === targetDiff;
+  });
+  return {
+    names: tied.map(e => e.name),
+    tied: tied.length > 1,
+  };
+};
+
+
 
 
 // How many teams advance from a given group (derived from PLAYOFF_STRUCTURE).
@@ -240,10 +263,17 @@ const CategoryBadge = ({ cat, small = false }) => {
   );
 };
 
-const PlayerRow = ({ name, score, isWinner, hasScore }) => (
+const PlayerRow = ({ name, score, isWinner, hasScore, tied }) => (
   <div className="flex items-center justify-between gap-3">
-    <div className={`text-sm ${isWinner ? 'font-bold text-white' : hasScore ? 'text-neutral-500' : 'text-neutral-300'} truncate`}>
-      {isWinner && '▸ '}{name}
+    <div className={`text-sm ${isWinner ? 'font-bold text-white' : hasScore ? 'text-neutral-500' : 'text-neutral-300'} truncate flex items-center gap-1.5`}>
+      {isWinner && <span className="shrink-0">▸ </span>}
+      <span className="truncate">{name}</span>
+      {tied && (
+        <span className="shrink-0 text-[9px] font-bold tracking-widest px-1 py-0.5 rounded"
+              style={{ backgroundColor: '#7c2d12', color: '#fed7aa', border: '1px solid #ea580c' }}>
+          TIE
+        </span>
+      )}
     </div>
     <div className={`font-mono font-bold tabular-nums ${isWinner ? 'text-white text-lg' : hasScore ? 'text-neutral-500 text-lg' : 'text-neutral-700 text-sm'}`}>
       {hasScore ? score : '—'}
@@ -251,7 +281,7 @@ const PlayerRow = ({ name, score, isWinner, hasScore }) => (
   </div>
 );
 
-const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP2 }) => {
+const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP2, p1Tied, p2Tied }) => {
   const hasScore = row && row.score1 != null && row.score2 != null;
   const isFinal = !!row?.is_final;
   const involvesMe = myPlayer && matchInvolvesPlayer(match, myPlayer);
@@ -309,13 +339,13 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
         </div>
 
         <div className="space-y-1.5">
-          <PlayerRow name={displayP1} score={row?.score1} isWinner={winner === 1} hasScore={hasScore} />
+          <PlayerRow name={displayP1} score={row?.score1} isWinner={winner === 1} hasScore={hasScore} tied={p1Tied} />
           <div className="flex items-center gap-2">
             <div className="flex-1 h-px bg-neutral-800"></div>
             <span className="text-[10px] text-neutral-600 font-mono">VS</span>
             <div className="flex-1 h-px bg-neutral-800"></div>
           </div>
-          <PlayerRow name={displayP2} score={row?.score2} isWinner={winner === 2} hasScore={hasScore} />
+          <PlayerRow name={displayP2} score={row?.score2} isWinner={winner === 2} hasScore={hasScore} tied={p2Tied} />
         </div>
 
         {isFinal && winnerName && (
@@ -679,34 +709,41 @@ const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) =>
 // Order of precedence:
 //   1. Manual override (override_p1 / override_p2 on any of the 3 sets)
 //   2. Auto-resolution from group standings (semis) or semi winners (finals)
+// Returns { p1, p2, p1Tied, p2Tied } where pX is a display string and pXTied
+// is true if the slot is tied between multiple players (joined by " / ").
 const resolvePlayoffNames = (match, standings, matches) => {
-  if (!match.isPlayoff) return { p1: null, p2: null };
+  if (!match.isPlayoff) return { p1: null, p2: null, p1Tied: false, p2Tied: false };
 
   const parentId = match.parentMatchId || match.id;
 
-  // STEP 1: Check for manual override on any of the 3 sets
+  // STEP 1: Check for manual override on any of the 3 sets — overrides clear ties
   const override = getPlayoffOverride(matches, parentId);
   if (override) {
-    return { p1: override.p1, p2: override.p2 };
+    return { p1: override.p1, p2: override.p2, p1Tied: false, p2Tied: false };
   }
 
-  // STEP 2: Auto-resolve from PLAYOFF_STRUCTURE (for semis)
+  // STEP 2: Auto-resolve from PLAYOFF_STRUCTURE (for semis) — surface ties
   if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
-    const structure = PLAYOFF_STRUCTURE[parentId];
-    const p1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
-    const p2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
-    return { p1, p2 };
+    const s = PLAYOFF_STRUCTURE[parentId];
+    const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat);
+    const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat);
+    return {
+      p1: a1 ? a1.names.join(' / ') : null,
+      p2: a2 ? a2.names.join(' / ') : null,
+      p1Tied: !!(a1 && a1.tied),
+      p2Tied: !!(a2 && a2.tied),
+    };
   }
 
   // STEP 3: Auto-resolve from semi-final winners (for finals)
   if (match.matchType === 'final' && FINALS_STRUCTURE[parentId]) {
-    const structure = FINALS_STRUCTURE[parentId];
-    const p1 = getSemiWinner(matches, structure.semi1, standings);
-    const p2 = getSemiWinner(matches, structure.semi2, standings);
-    return { p1, p2 };
+    const s = FINALS_STRUCTURE[parentId];
+    const p1 = getSemiWinner(matches, s.semi1, standings);
+    const p2 = getSemiWinner(matches, s.semi2, standings);
+    return { p1, p2, p1Tied: false, p2Tied: false };
   }
 
-  return { p1: null, p2: null };
+  return { p1: null, p2: null, p1Tied: false, p2Tied: false };
 };
 
 // ---------- Tabs ----------
@@ -753,8 +790,8 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {slotMatches.map(m => {
-                const { p1, p2 } = resolvePlayoffNames(m, standings, matches);
-                return <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} />;
+                const { p1, p2, p1Tied, p2Tied } = resolvePlayoffNames(m, standings, matches);
+                return <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} p1Tied={p1Tied} p2Tied={p2Tied} />;
               })}
             </div>
           </div>
@@ -797,9 +834,30 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                   const overrideP1 = override ? override.p1 : null;
                   const overrideP2 = override ? override.p2 : null;
 
+                  let p1Tied = false, p2Tied = false;
                   if (isSemi) {
-                    p1Name = overrideP1 || resolveSemiSlot(standings, item.slot1, item.cat) || `${item.slot1.group}${item.slot1.rank > 1 ? ' #' + item.slot1.rank : ''}`;
-                    p2Name = overrideP2 || resolveSemiSlot(standings, item.slot2, item.cat) || `${item.slot2.group}${item.slot2.rank > 1 ? ' #' + item.slot2.rank : ''}`;
+                    if (overrideP1) {
+                      p1Name = overrideP1;
+                    } else {
+                      const a1 = resolveSemiSlotAll(standings, item.slot1, item.cat);
+                      if (a1) {
+                        p1Name = a1.names.join(' / ');
+                        p1Tied = a1.tied;
+                      } else {
+                        p1Name = `${item.slot1.group}${item.slot1.rank > 1 ? ' #' + item.slot1.rank : ''}`;
+                      }
+                    }
+                    if (overrideP2) {
+                      p2Name = overrideP2;
+                    } else {
+                      const a2 = resolveSemiSlotAll(standings, item.slot2, item.cat);
+                      if (a2) {
+                        p2Name = a2.names.join(' / ');
+                        p2Tied = a2.tied;
+                      } else {
+                        p2Name = `${item.slot2.group}${item.slot2.rank > 1 ? ' #' + item.slot2.rank : ''}`;
+                      }
+                    }
                     winner = getSemiWinner(matches, item.id, standings);
                   } else {
                     p1Name = overrideP1 || getSemiWinner(matches, item.semi1, standings) || `Winner of ${item.semi1}`;
@@ -841,8 +899,14 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                       <div className="space-y-2">
                         {/* Team 1 */}
                         <div className="flex items-center justify-between gap-2">
-                          <div className={`text-sm ${winner === p1Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1`}>
-                            {winner === p1Name && '▸ '}{p1Name}
+                          <div className={`text-sm ${winner === p1Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1 flex items-center gap-1.5`}>
+                            <span className="truncate">{winner === p1Name && '▸ '}{p1Name}</span>
+                            {p1Tied && (
+                              <span className="shrink-0 text-[9px] font-bold tracking-widest px-1 py-0.5 rounded"
+                                    style={{ backgroundColor: '#7c2d12', color: '#fed7aa', border: '1px solid #ea580c' }}>
+                                TIE
+                              </span>
+                            )}
                           </div>
                           <div className="flex gap-1 font-mono font-bold tabular-nums">
                             {sets.map(s => (
@@ -854,8 +918,14 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                         </div>
                         {/* Team 2 */}
                         <div className="flex items-center justify-between gap-2">
-                          <div className={`text-sm ${winner === p2Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1`}>
-                            {winner === p2Name && '▸ '}{p2Name}
+                          <div className={`text-sm ${winner === p2Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1 flex items-center gap-1.5`}>
+                            <span className="truncate">{winner === p2Name && '▸ '}{p2Name}</span>
+                            {p2Tied && (
+                              <span className="shrink-0 text-[9px] font-bold tracking-widest px-1 py-0.5 rounded"
+                                    style={{ backgroundColor: '#7c2d12', color: '#fed7aa', border: '1px solid #ea580c' }}>
+                                TIE
+                              </span>
+                            )}
                           </div>
                           <div className="flex gap-1 font-mono font-bold tabular-nums">
                             {sets.map(s => (
@@ -999,11 +1069,11 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {playing.map(m => {
-                  const { p1, p2 } = resolvePlayoffNames(m, standings, matches);
+                  const { p1, p2, p1Tied, p2Tied } = resolvePlayoffNames(m, standings, matches);
                   return (
                     <div key={m.id}>
                       <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
-                      <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} />
+                      <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} p1Tied={p1Tied} p2Tied={p2Tied} />
                     </div>
                   );
                 })}
@@ -1018,11 +1088,11 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {umpiring.map(m => {
-                  const { p1, p2 } = resolvePlayoffNames(m, standings, matches);
+                  const { p1, p2, p1Tied, p2Tied } = resolvePlayoffNames(m, standings, matches);
                   return (
                     <div key={m.id}>
                       <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
-                      <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} />
+                      <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} p1Tied={p1Tied} p2Tied={p2Tied} />
                     </div>
                   );
                 })}
@@ -1066,7 +1136,7 @@ export default function TournamentApp() {
   const totalNonPlayoff = SCHEDULE.filter(m => !m.isPlayoff).length;
 
   // Get resolved names for the currently editing match
-  const editingResolved = editing ? resolvePlayoffNames(editing, standings, matches) : { p1: null, p2: null };
+  const editingResolved = editing ? resolvePlayoffNames(editing, standings, matches) : { p1: null, p2: null, p1Tied: false, p2Tied: false };
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: '#050505' }}>

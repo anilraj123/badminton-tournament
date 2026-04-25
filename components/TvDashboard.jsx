@@ -86,6 +86,22 @@ const resolveSemiSlot = (standings, slotInfo, cat) => {
   const entry = g[slotInfo.rank - 1];
   return entry && entry.played > 0 ? entry.name : null;
 };
+const resolveSemiSlotAll = (standings, slotInfo, cat) => {
+  if (!slotInfo || !standings[cat]) return null;
+  const groupStandings = standings[cat][slotInfo.group];
+  if (!groupStandings || groupStandings.length < slotInfo.rank) return null;
+  const target = groupStandings[slotInfo.rank - 1];
+  if (!target || target.played === 0) return null;
+  const targetWon = target.won;
+  const targetDiff = target.pointsFor - target.pointsAgainst;
+  const tied = groupStandings.filter(e => {
+    if (e.played === 0) return false;
+    return e.won === targetWon && (e.pointsFor - e.pointsAgainst) === targetDiff;
+  });
+  return { names: tied.map(e => e.name), tied: tied.length > 1 };
+};
+
+
 
 const getSemiWinner = (matches, semiId, standings) => {
   const structure = PLAYOFF_STRUCTURE[semiId];
@@ -110,15 +126,19 @@ const getSemiWinner = (matches, semiId, standings) => {
 };
 
 const resolvePlayoffNames = (match, standings, matches) => {
-  if (!match.isPlayoff) return { p1: match.p1, p2: match.p2 };
+  if (!match.isPlayoff) return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
   const parentId = match.parentMatchId || match.id;
   const override = getPlayoffOverride(matches, parentId);
-  if (override) return { p1: override.p1 || match.p1, p2: override.p2 || match.p2 };
+  if (override) return { p1: override.p1 || match.p1, p2: override.p2 || match.p2, p1Tied: false, p2Tied: false };
   if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
     const s = PLAYOFF_STRUCTURE[parentId];
+    const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat);
+    const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat);
     return {
-      p1: resolveSemiSlot(standings, s.slot1, s.cat) || match.p1,
-      p2: resolveSemiSlot(standings, s.slot2, s.cat) || match.p2,
+      p1: a1 ? a1.names.join(' / ') : match.p1,
+      p2: a2 ? a2.names.join(' / ') : match.p2,
+      p1Tied: !!(a1 && a1.tied),
+      p2Tied: !!(a2 && a2.tied),
     };
   }
   if (match.matchType === 'final' && FINALS_STRUCTURE[parentId]) {
@@ -126,9 +146,10 @@ const resolvePlayoffNames = (match, standings, matches) => {
     return {
       p1: getSemiWinner(matches, s.semi1, standings) || match.p1,
       p2: getSemiWinner(matches, s.semi2, standings) || match.p2,
+      p1Tied: false, p2Tied: false,
     };
   }
-  return { p1: match.p1, p2: match.p2 };
+  return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
 };
 
 
@@ -188,7 +209,7 @@ function useClock() {
 }
 
 // Compact court card
-const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live }) => {
+const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live, p1Tied, p2Tied }) => {
   if (!match) {
     return (
       <div className="rounded-lg border-2 border-gray-200 bg-white p-2 flex flex-col justify-center items-center h-[100px]">
@@ -239,16 +260,24 @@ const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live }) => {
       </div>
       <div className="flex-1 flex flex-col justify-center gap-0.5">
         <div className="flex items-center justify-between">
-          <div className={`text-sm font-bold truncate pr-2 ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-400' : 'text-gray-800'}`}>
-            {winner === 1 && <span style={{ color: c.accent }}>▸ </span>}{p1Name}
+          <div className={`text-sm font-bold truncate pr-2 flex items-center gap-1 ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-400' : 'text-gray-800'}`}>
+            {winner === 1 && <span style={{ color: c.accent }}>▸</span>}
+            <span className="truncate">{p1Name}</span>
+            {p1Tied && (
+              <span className="shrink-0 text-[8px] font-bold tracking-widest px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>
+            )}
           </div>
           <div className={`text-2xl font-bold tabular-nums leading-none ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-300' : 'text-gray-600'}`}>
             {hasScore ? row.score1 : '–'}
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <div className={`text-sm font-bold truncate pr-2 ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-400' : 'text-gray-800'}`}>
-            {winner === 2 && <span style={{ color: c.accent }}>▸ </span>}{p2Name}
+          <div className={`text-sm font-bold truncate pr-2 flex items-center gap-1 ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-400' : 'text-gray-800'}`}>
+            {winner === 2 && <span style={{ color: c.accent }}>▸</span>}
+            <span className="truncate">{p2Name}</span>
+            {p2Tied && (
+              <span className="shrink-0 text-[8px] font-bold tracking-widest px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>
+            )}
           </div>
           <div className={`text-2xl font-bold tabular-nums leading-none ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-300' : 'text-gray-600'}`}>
             {hasScore ? row.score2 : '–'}
@@ -340,8 +369,21 @@ const CategoryColumn = ({ cat, standings, matches }) => {
           {semiEntries.map(([semiId, semiInfo]) => {
             const winner = getSemiWinner(matches, semiId, standings);
             const override = getPlayoffOverride(matches, semiId);
-            const p1 = override?.p1 || resolveSemiSlot(standings, semiInfo.slot1, cat);
-            const p2 = override?.p2 || resolveSemiSlot(standings, semiInfo.slot2, cat);
+            let p1, p2, p1IsTied = false, p2IsTied = false;
+            if (override?.p1) {
+              p1 = override.p1;
+            } else {
+              const a1 = resolveSemiSlotAll(standings, semiInfo.slot1, cat);
+              p1 = a1 ? a1.names.join(' / ') : null;
+              p1IsTied = !!(a1 && a1.tied);
+            }
+            if (override?.p2) {
+              p2 = override.p2;
+            } else {
+              const a2 = resolveSemiSlotAll(standings, semiInfo.slot2, cat);
+              p2 = a2 ? a2.names.join(' / ') : null;
+              p2IsTied = !!(a2 && a2.tied);
+            }
             // Check if any sets played
             let setsPlayed = 0;
             for (let s = 1; s <= 3; s++) {
@@ -354,10 +396,12 @@ const CategoryColumn = ({ cat, standings, matches }) => {
                 <span className={winner === p1 ? 'font-bold text-gray-900' : winner === p2 ? 'text-gray-400' : 'text-gray-700'}>
                   {p1 || '—'}
                 </span>
+                {p1IsTied && <span className="ml-0.5 text-[8px] font-bold px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>}
                 <span className="text-gray-300 mx-1">v</span>
                 <span className={winner === p2 ? 'font-bold text-gray-900' : winner === p1 ? 'text-gray-400' : 'text-gray-700'}>
                   {p2 || '—'}
                 </span>
+                {p2IsTied && <span className="ml-0.5 text-[8px] font-bold px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>}
                 {winner && <span className="ml-1 text-green-600 font-bold">✓</span>}
               </div>
             );
@@ -409,7 +453,7 @@ export default function TvDashboard() {
     return SCHEDULE.map(m => {
       const row = matches[m.id] || null;
       const names = resolvePlayoffNames(m, standings, matches);
-      return { ...m, row, p1Name: names.p1, p2Name: names.p2, active: isActive(row, now) };
+      return { ...m, row, p1Name: names.p1, p2Name: names.p2, p1Tied: names.p1Tied, p2Tied: names.p2Tied, active: isActive(row, now) };
     });
   }, [matches, standings, now]);
 
@@ -514,6 +558,8 @@ export default function TvDashboard() {
               row={m?.row}
               p1Name={m?.p1Name}
               p2Name={m?.p2Name}
+              p1Tied={m?.p1Tied}
+              p2Tied={m?.p2Tied}
               live={m?.active && !m?.row?.is_final}
             />
           );
