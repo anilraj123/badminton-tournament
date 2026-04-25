@@ -45,10 +45,6 @@ const namesMatch = (groupPlayer, schedulePlayer) => {
   return false;
 };
 
-// Returns true only when every prelim match in a category has been scored as
-// final. Used to hold off on resolving semi names until prelims for that
-// category are fully done — otherwise mid-tournament the displayed semifinalist
-// flips around as the leaderboard shifts.
 const arePrelimsComplete = (cat, matches) => {
   const prelims = SCHEDULE.filter(m => !m.isPlayoff && m.cat === cat);
   if (prelims.length === 0) return true;
@@ -111,17 +107,12 @@ const resolveSemiSlotAll = (standings, slotInfo, cat) => {
   return { names: tied.map(e => e.name), tied: tied.length > 1 };
 };
 
-
-
 const getSemiWinner = (matches, semiId, standings) => {
   const structure = PLAYOFF_STRUCTURE[semiId];
   if (!structure) return null;
   const override = getPlayoffOverride(matches, semiId);
   let team1 = override ? override.p1 : null;
   let team2 = override ? override.p2 : null;
-  // Fall back to auto-resolution from standings only after all prelims for
-  // this category are scored. Otherwise standings are mid-shift and would
-  // produce a fictitious semi winner that cascades into the Final.
   if ((!team1 || !team2) && !arePrelimsComplete(structure.cat, matches)) return null;
   if (!team1) team1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
   if (!team2) team2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
@@ -139,11 +130,6 @@ const getSemiWinner = (matches, semiId, standings) => {
   return null;
 };
 
-// Resolve display names for a playoff match.
-// Override always wins. Otherwise:
-//   - Semi: only resolve actual names if all prelims for the category are
-//     done; until then, fall back to the schedule placeholder.
-//   - Final: pulls from semi winners (which are themselves gated above).
 const resolvePlayoffNames = (match, standings, matches) => {
   if (!match.isPlayoff) return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
   const parentId = match.parentMatchId || match.id;
@@ -174,9 +160,6 @@ const resolvePlayoffNames = (match, standings, matches) => {
   return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
 };
 
-
-// How many teams advance from a given group (derived from PLAYOFF_STRUCTURE).
-// 4-group categories (MS, MD) → 1 per group; 2-group categories → 2 per group.
 const advanceCountForGroup = (cat, groupName) => {
   let count = 0;
   for (const v of Object.values(PLAYOFF_STRUCTURE)) {
@@ -230,13 +213,13 @@ function useClock() {
   return now;
 }
 
-// Compact court card
+// Court card — taller now to use freed space, with bigger fonts
 const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live, p1Tied, p2Tied }) => {
   if (!match) {
     return (
-      <div className="rounded-lg border-2 border-gray-200 bg-white p-2 flex flex-col justify-center items-center h-[100px]">
-        <div className="text-[10px] font-bold tracking-widest text-gray-400">COURT {courtNum}</div>
-        <div className="text-lg font-bold text-gray-300 mt-1">IDLE</div>
+      <div className="rounded-lg border-2 border-gray-200 bg-white p-3 flex flex-col justify-center items-center h-[140px]">
+        <div className="text-xs font-bold tracking-widest text-gray-400">COURT {courtNum}</div>
+        <div className="text-2xl font-bold text-gray-300 mt-1">IDLE</div>
       </div>
     );
   }
@@ -247,26 +230,26 @@ const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live, p1Tied, p2Tied 
   const borderColor = live ? c.accent : complete ? '#d1d5db' : c.soft;
   const borderWidth = live ? '3px' : '2px';
   return (
-    <div className="rounded-lg p-2 h-[100px] flex flex-col bg-white"
+    <div className="rounded-lg p-3 h-[140px] flex flex-col bg-white"
          style={{ border: `${borderWidth} solid ${borderColor}` }}>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] font-bold tracking-widest text-gray-500">CT {courtNum}</span>
-          <span className="px-1 py-0.5 text-[9px] font-bold tracking-widest rounded"
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-bold tracking-widest text-gray-500">CT {courtNum}</span>
+          <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-widest rounded"
                 style={{ backgroundColor: c.soft, color: c.text }}>{match.cat}</span>
           {match.matchType === 'semi' && (
-            <span className="px-1 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800">
+            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-100 text-amber-800">
               SEMI{match.setNumber ? ` S${match.setNumber}` : ''}
             </span>
           )}
           {match.matchType === 'final' && (
-            <span className="px-1 py-0.5 text-[9px] font-bold rounded bg-red-100 text-red-800">
+            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-100 text-red-800">
               FINAL{match.setNumber ? ` S${match.setNumber}` : ''}
             </span>
           )}
         </div>
         {live ? (
-          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-widest"
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tracking-widest"
                style={{ backgroundColor: c.accent, color: '#fff' }}>
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-white opacity-75"></span>
@@ -275,49 +258,51 @@ const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live, p1Tied, p2Tied 
             LIVE
           </div>
         ) : complete ? (
-          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-widest bg-gray-100 text-gray-500">DONE</span>
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-widest bg-gray-100 text-gray-500">DONE</span>
         ) : (
-          <span className="text-[10px] font-bold text-gray-400 tracking-widest">{fmtTimeShort(match.time)}</span>
+          <span className="text-xs font-bold text-gray-400 tracking-widest">{fmtTimeShort(match.time)}</span>
         )}
       </div>
-      <div className="flex-1 flex flex-col justify-center gap-0.5">
+      <div className="flex-1 flex flex-col justify-center gap-1">
         <div className="flex items-center justify-between">
-          <div className={`text-sm font-bold truncate pr-2 flex items-center gap-1 ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-400' : 'text-gray-800'}`}>
+          <div className={`text-base font-bold truncate pr-2 flex items-center gap-1 ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-400' : 'text-gray-800'}`}>
             {winner === 1 && <span style={{ color: c.accent }}>▸</span>}
             <span className="truncate">{p1Name}</span>
             {p1Tied && (
-              <span className="shrink-0 text-[8px] font-bold tracking-widest px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>
+              <span className="shrink-0 text-[9px] font-bold tracking-widest px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>
             )}
           </div>
-          <div className={`text-2xl font-bold tabular-nums leading-none ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-300' : 'text-gray-600'}`}>
+          <div className={`text-3xl font-bold tabular-nums leading-none ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-300' : 'text-gray-600'}`}>
             {hasScore ? row.score1 : '–'}
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <div className={`text-sm font-bold truncate pr-2 flex items-center gap-1 ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-400' : 'text-gray-800'}`}>
+          <div className={`text-base font-bold truncate pr-2 flex items-center gap-1 ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-400' : 'text-gray-800'}`}>
             {winner === 2 && <span style={{ color: c.accent }}>▸</span>}
             <span className="truncate">{p2Name}</span>
             {p2Tied && (
-              <span className="shrink-0 text-[8px] font-bold tracking-widest px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>
+              <span className="shrink-0 text-[9px] font-bold tracking-widest px-1 rounded bg-orange-100 text-orange-800 border border-orange-300">TIE</span>
             )}
           </div>
-          <div className={`text-2xl font-bold tabular-nums leading-none ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-300' : 'text-gray-600'}`}>
+          <div className={`text-3xl font-bold tabular-nums leading-none ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-300' : 'text-gray-600'}`}>
             {hasScore ? row.score2 : '–'}
           </div>
+        </div>
+        <div className="text-[10px] text-gray-400 mt-1 flex justify-between">
+          <span className="truncate">UMP · {match.umpire || '—'}</span>
+          {!live && !complete && match.time && <span className="font-mono shrink-0 ml-2">{fmtTimeShort(match.time)}</span>}
         </div>
       </div>
     </div>
   );
 };
 
-// Category column - ALL teams in groups + playoff section
+// Category column — content-sized, no flex stretch
 const CategoryColumn = ({ cat, standings, matches }) => {
   const c = CAT_COLORS[cat];
   const groups = standings[cat] || {};
   const semiEntries = Object.entries(PLAYOFF_STRUCTURE).filter(([_, v]) => v.cat === cat);
   const finalEntry = Object.entries(FINALS_STRUCTURE).find(([_, v]) => v.cat === cat);
-  // Once prelims for this category are complete we can resolve actual semi
-  // names; until then only overrides drive the playoff strip.
   const prelimsDone = arePrelimsComplete(cat, matches);
 
   let champion = null;
@@ -343,30 +328,30 @@ const CategoryColumn = ({ cat, standings, matches }) => {
   }
 
   return (
-    <div className="rounded-lg overflow-hidden flex flex-col bg-white min-h-0" style={{ border: `1.5px solid ${c.soft}` }}>
-      <div className="px-2 py-1 flex items-center justify-between" style={{ backgroundColor: c.soft }}>
+    <div className="rounded-lg overflow-hidden flex flex-col bg-white" style={{ border: `1.5px solid ${c.soft}` }}>
+      <div className="px-2.5 py-1.5 flex items-center justify-between" style={{ backgroundColor: c.soft }}>
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-widest rounded text-white shrink-0" style={{ backgroundColor: c.accent }}>{cat}</span>
-          <span className="text-xs font-bold truncate" style={{ color: c.text }}>{CAT_LABELS[cat]}</span>
+          <span className="px-1.5 py-0.5 text-[11px] font-bold tracking-widest rounded text-white shrink-0" style={{ backgroundColor: c.accent }}>{cat}</span>
+          <span className="text-sm font-bold truncate" style={{ color: c.text }}>{CAT_LABELS[cat]}</span>
         </div>
         {champion && (
-          <span className="text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-yellow-300 text-yellow-900 truncate ml-1 shrink-0">
+          <span className="text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-yellow-300 text-yellow-900 truncate ml-1 shrink-0">
             🏆 {champion}
           </span>
         )}
       </div>
 
-      <div className="flex-1 divide-y divide-gray-100 overflow-hidden">
+      <div className="divide-y divide-gray-100">
         {Object.entries(groups).map(([groupName, rows]) => (
-          <div key={groupName} className="px-2 py-0.5">
-            <div className="text-[9px] font-bold tracking-widest text-gray-400">{groupName.replace('Group ', 'GRP ')}</div>
+          <div key={groupName} className="px-2.5 py-1">
+            <div className="text-[10px] font-bold tracking-widest text-gray-400">{groupName.replace('Group ', 'GRP ')}</div>
             {rows.map((r, i) => {
               const diff = r.pointsFor - r.pointsAgainst;
               const advancing = i < advanceCountForGroup(cat, groupName) && r.played > 0;
               return (
-                <div key={r.name} className="flex items-center justify-between py-0 text-[11px] leading-tight">
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span className={`font-mono w-3 text-[10px] ${advancing ? 'font-bold' : 'text-gray-300'}`}
+                <div key={r.name} className="flex items-center justify-between py-0.5 text-xs leading-tight">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <span className={`font-mono w-3 text-[11px] ${advancing ? 'font-bold' : 'text-gray-300'}`}
                           style={{ color: advancing ? c.accent : undefined }}>
                       {i + 1}
                     </span>
@@ -374,7 +359,7 @@ const CategoryColumn = ({ cat, standings, matches }) => {
                       {r.name}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 font-mono tabular-nums text-[10px] shrink-0">
+                  <div className="flex items-center gap-2 font-mono tabular-nums text-[11px] shrink-0">
                     <span className={advancing ? 'text-gray-700' : 'text-gray-300'}>{r.won}-{r.lost}</span>
                     <span className={`w-7 text-right ${diff > 0 ? 'text-green-600 font-bold' : diff < 0 ? 'text-red-500' : 'text-gray-300'}`}>
                       {diff > 0 ? '+' : ''}{diff}
@@ -387,16 +372,12 @@ const CategoryColumn = ({ cat, standings, matches }) => {
         ))}
       </div>
 
-      {/* Playoffs strip - show full names with separate lines */}
       {semiEntries.length > 0 && (
-        <div className="px-2 py-1 border-t border-gray-200 bg-gray-50">
-          <div className="text-[9px] font-bold tracking-widest text-gray-400">PLAYOFFS</div>
+        <div className="px-2.5 py-1.5 border-t border-gray-200 bg-gray-50">
+          <div className="text-[10px] font-bold tracking-widest text-gray-400">PLAYOFFS</div>
           {semiEntries.map(([semiId, semiInfo]) => {
             const winner = getSemiWinner(matches, semiId, standings);
             const override = getPlayoffOverride(matches, semiId);
-            // Only auto-resolve names once prelims are done. Override always
-            // wins. Until prelims complete, leave names null so we render an
-            // em-dash placeholder rather than a flickering top-of-leaderboard.
             let p1, p2, p1IsTied = false, p2IsTied = false;
             if (override?.p1) {
               p1 = override.p1;
@@ -412,14 +393,8 @@ const CategoryColumn = ({ cat, standings, matches }) => {
               p2 = a2 ? a2.names.join(' / ') : null;
               p2IsTied = !!(a2 && a2.tied);
             }
-            // Check if any sets played
-            let setsPlayed = 0;
-            for (let s = 1; s <= 3; s++) {
-              const row = matches[`${semiId}_s${s}`];
-              if (row && row.is_final) setsPlayed++;
-            }
             return (
-              <div key={semiId} className="text-[10px] py-0 leading-tight">
+              <div key={semiId} className="text-[11px] py-0 leading-tight">
                 <span className="text-gray-400 font-mono">S{semiInfo.label.match(/\d+/)?.[0] || ''}: </span>
                 <span className={winner === p1 ? 'font-bold text-gray-900' : winner === p2 ? 'text-gray-400' : 'text-gray-700'}>
                   {p1 || '—'}
@@ -435,7 +410,7 @@ const CategoryColumn = ({ cat, standings, matches }) => {
             );
           })}
           {finalEntry && (
-            <div className="text-[10px] py-0 leading-tight border-t border-gray-200 mt-0.5 pt-0.5">
+            <div className="text-[11px] py-0 leading-tight border-t border-gray-200 mt-0.5 pt-0.5">
               <span className="text-amber-600 font-bold font-mono">F: </span>
               {finalScoresStr ? (
                 <span className="text-gray-700">{finalScoresStr}</span>
@@ -450,28 +425,62 @@ const CategoryColumn = ({ cat, standings, matches }) => {
   );
 };
 
-// Compact match row for recent/upcoming
-const CompactRow = ({ match, row, p1Name, p2Name }) => {
+// Compact match row for recent / upcoming / by-court
+const CompactRow = ({ match, row, p1Name, p2Name, showCourt = false }) => {
   const c = CAT_COLORS[match.cat] || CAT_COLORS.MS;
   const hasScore = row && row.score1 != null && row.score2 != null;
+  const complete = !!row?.is_final;
   const winner = hasScore ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
   return (
-    <div className="flex items-center gap-1.5 text-[11px] py-0.5 px-1.5 rounded bg-white border border-gray-100 min-w-0 leading-tight">
-      <span className="font-mono text-[9px] text-gray-400 w-9 shrink-0">{fmtTimeShort(match.time)}</span>
+    <div className="flex items-center gap-1.5 text-[11px] py-0.5 px-2 rounded bg-white border border-gray-100 min-w-0 leading-tight">
+      <span className="font-mono text-[10px] text-gray-400 w-9 shrink-0">{fmtTimeShort(match.time)}</span>
+      {showCourt && <span className="font-mono text-[9px] text-gray-400 w-6 shrink-0">C{match.court}</span>}
       <span className="px-1 rounded text-[9px] font-bold tracking-wider shrink-0"
             style={{ backgroundColor: c.soft, color: c.text }}>{match.cat}</span>
       <span className={`truncate flex-1 min-w-0 ${winner === 1 ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{p1Name}</span>
-      {hasScore && (
-        <span className="font-mono tabular-nums font-bold text-gray-900 shrink-0 text-[10px]">
+      {hasScore ? (
+        <span className={`font-mono tabular-nums shrink-0 text-[10px] ${complete ? 'font-bold text-gray-900' : 'text-gray-600'}`}>
           {row.score1}-{row.score2}
         </span>
+      ) : (
+        <span className="font-mono text-[10px] text-gray-300 shrink-0">vs</span>
       )}
       <span className={`truncate flex-1 min-w-0 text-right ${winner === 2 ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{p2Name}</span>
     </div>
   );
 };
 
-// Main Dashboard
+// Court timeline column — what's happened, what's now, what's next ON THIS COURT
+const CourtTimeline = ({ courtNum, allMatches, now }) => {
+  // Filter to this court only, group by collapsed parent (so 3-set playoffs = 1 entry)
+  const seenParents = new Set();
+  const courtMatches = allMatches
+    .filter(m => m.court === courtNum)
+    .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time))
+    .filter(m => {
+      const pid = parentIdOf(m);
+      if (seenParents.has(pid)) return false;
+      seenParents.add(pid);
+      return true;
+    });
+
+  return (
+    <div className="rounded-lg bg-white border border-gray-200 flex flex-col overflow-hidden">
+      <div className="px-2.5 py-1.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+        <div className="text-xs font-bold tracking-widest text-gray-700">COURT {courtNum} TIMELINE</div>
+        <div className="text-[10px] font-mono text-gray-400">{courtMatches.length} matches</div>
+      </div>
+      <div className="overflow-hidden flex-1">
+        <div className="space-y-0.5 p-1">
+          {courtMatches.map(m => (
+            <CompactRow key={m.id} match={m} row={m.row} p1Name={m.p1Name} p2Name={m.p2Name} showCourt={false} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function TvDashboard() {
   const { matches, connected } = useMatches();
   const now = useClock();
@@ -508,34 +517,6 @@ export default function TvDashboard() {
       }
     }
     return result;
-  }, [allMatches]);
-
-  const recent = useMemo(() => {
-    const seen = new Set();
-    return allMatches
-      .filter(m => m.row?.is_final)
-      .sort((a, b) => new Date(b.row?.updated_at || 0) - new Date(a.row?.updated_at || 0))
-      .filter(m => {
-        const pid = parentIdOf(m);
-        if (seen.has(pid)) return false;
-        seen.add(pid);
-        return true;
-      })
-      .slice(0, 8);
-  }, [allMatches]);
-
-  const upcoming = useMemo(() => {
-    const seen = new Set();
-    return allMatches
-      .filter(m => !m.row?.is_final && !m.active)
-      .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time))
-      .filter(m => {
-        const pid = parentIdOf(m);
-        if (seen.has(pid)) return false;
-        seen.add(pid);
-        return true;
-      })
-      .slice(0, 8);
   }, [allMatches]);
 
   const completedCount = SCHEDULE.filter(m => !m.isPlayoff && matches[m.id]?.is_final).length;
@@ -594,45 +575,18 @@ export default function TvDashboard() {
         })}
       </section>
 
-      {/* Standings grid - 5 categories, full team lists */}
-      <section className="flex-1 grid grid-cols-5 gap-2 min-h-0">
+      {/* Standings — content-sized, NOT flex-1 */}
+      <section className="grid grid-cols-5 gap-2 shrink-0">
         {Object.keys(GROUPS).map(cat => (
           <CategoryColumn key={cat} cat={cat} standings={standings} matches={matches} />
         ))}
       </section>
 
-      {/* Recent + Upcoming */}
-      <section className="grid grid-cols-2 gap-3 shrink-0">
-        <div>
-          <div className="text-[9px] font-bold tracking-widest text-gray-400 mb-0.5 flex items-center gap-1.5">
-            <span>RECENT RESULTS</span>
-            <div className="flex-1 h-px bg-gray-200"></div>
-          </div>
-          <div className="space-y-0.5">
-            {recent.length === 0 ? (
-              <div className="text-xs text-gray-300 italic py-1">No matches completed yet</div>
-            ) : (
-              recent.map(m => (
-                <CompactRow key={m.id} match={m} row={m.row} p1Name={m.p1Name} p2Name={m.p2Name} />
-              ))
-            )}
-          </div>
-        </div>
-        <div>
-          <div className="text-[9px] font-bold tracking-widest text-gray-400 mb-0.5 flex items-center gap-1.5">
-            <span>UP NEXT</span>
-            <div className="flex-1 h-px bg-gray-200"></div>
-          </div>
-          <div className="space-y-0.5">
-            {upcoming.length === 0 ? (
-              <div className="text-xs text-gray-300 italic py-1">No upcoming matches</div>
-            ) : (
-              upcoming.map(m => (
-                <CompactRow key={m.id} match={m} row={m.row} p1Name={m.p1Name} p2Name={m.p2Name} />
-              ))
-            )}
-          </div>
-        </div>
+      {/* Court timelines fill the remaining vertical space */}
+      <section className="grid grid-cols-3 gap-2 flex-1 min-h-0">
+        {[1, 2, 3].map(cn => (
+          <CourtTimeline key={cn} courtNum={cn} allMatches={allMatches} now={now} />
+        ))}
       </section>
     </div>
   );
