@@ -184,6 +184,19 @@ const resolveSemiSlot = (standings, slotInfo, cat) => {
   return entry && entry.played > 0 ? entry.name : null;
 };
 
+
+// How many teams advance from a given group (derived from PLAYOFF_STRUCTURE).
+// MS/MD use 4-group brackets → 1 per group; WS/WD/MXD use 2-group brackets → 2 per group.
+const advanceCountForGroup = (cat, groupName) => {
+  let count = 0;
+  for (const v of Object.values(PLAYOFF_STRUCTURE)) {
+    if (v.cat !== cat) continue;
+    if (v.slot1?.group === groupName) count = Math.max(count, v.slot1.rank);
+    if (v.slot2?.group === groupName) count = Math.max(count, v.slot2.rank);
+  }
+  return count || 1;
+};
+
 // Calculate the winner of a semi-final based on 3-set scores
 // Returns the winning team name, or null if not yet determined
 // Checks override first, then falls back to auto-resolution from group standings
@@ -912,7 +925,7 @@ const StandingsTab = ({ matches, standings }) => {
               <tbody>
                 {rows.map((r, i) => {
                   const diff = r.pointsFor - r.pointsAgainst;
-                  const q = i < 2 && r.played > 0;
+                  const q = i < advanceCountForGroup(activeCat, groupName) && r.played > 0;
                   return (
                     <tr key={r.name} className="border-b border-neutral-900 last:border-0">
                       <td className="p-2 pl-4 font-mono text-neutral-500">{q ? <span style={{ color: CAT_COLORS[activeCat].accent }}>{i+1}</span> : (i+1)}</td>
@@ -927,7 +940,7 @@ const StandingsTab = ({ matches, standings }) => {
               </tbody>
             </table>
             <div className="px-4 py-2 border-t border-neutral-800 text-[10px] text-neutral-600 tracking-wider">
-              <span style={{ color: CAT_COLORS[activeCat].accent }}>●</span> Top 2 advance to semifinals
+              <span style={{ color: CAT_COLORS[activeCat].accent }}>●</span> Top {advanceCountForGroup(activeCat, groupName)} advance{advanceCountForGroup(activeCat, groupName) === 1 ? 's' : ''} to semifinals
             </div>
           </div>
         ))}

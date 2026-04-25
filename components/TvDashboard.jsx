@@ -131,6 +131,19 @@ const resolvePlayoffNames = (match, standings, matches) => {
   return { p1: match.p1, p2: match.p2 };
 };
 
+
+// How many teams advance from a given group (derived from PLAYOFF_STRUCTURE).
+// 4-group categories (MS, MD) → 1 per group; 2-group categories → 2 per group.
+const advanceCountForGroup = (cat, groupName) => {
+  let count = 0;
+  for (const v of Object.values(PLAYOFF_STRUCTURE)) {
+    if (v.cat !== cat) continue;
+    if (v.slot1?.group === groupName) count = Math.max(count, v.slot1.rank);
+    if (v.slot2?.group === groupName) count = Math.max(count, v.slot2.rank);
+  }
+  return count || 1;
+};
+
 const isActive = (row, now) => {
   if (!row || !row.last_activity || !now) return false;
   const last = new Date(row.last_activity).getTime();
@@ -295,7 +308,7 @@ const CategoryColumn = ({ cat, standings, matches }) => {
             <div className="text-[9px] font-bold tracking-widest text-gray-400">{groupName.replace('Group ', 'GRP ')}</div>
             {rows.map((r, i) => {
               const diff = r.pointsFor - r.pointsAgainst;
-              const advancing = i < 2 && r.played > 0;
+              const advancing = i < advanceCountForGroup(cat, groupName) && r.played > 0;
               return (
                 <div key={r.name} className="flex items-center justify-between py-0 text-[11px] leading-tight">
                   <div className="flex items-center gap-1 flex-1 min-w-0">
