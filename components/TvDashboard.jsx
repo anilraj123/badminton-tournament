@@ -7,32 +7,21 @@ import {
   PLAYOFF_STRUCTURE, FINALS_STRUCTURE,
 } from '../lib/tournament-data';
 
-// =========================================================
-// Light palette — bright gym, 10+ ft viewing
-// =========================================================
+// Light palette - bright gym, 10+ ft viewing
 const CAT_COLORS = {
-  MS:  { accent: '#1e40af', soft: '#dbeafe', text: '#1e3a8a' }, // deep blue
-  MD:  { accent: '#6d28d9', soft: '#ede9fe', text: '#5b21b6' }, // purple
-  MXD: { accent: '#c2410c', soft: '#ffedd5', text: '#9a3412' }, // burnt orange
-  WS:  { accent: '#be185d', soft: '#fce7f3', text: '#9d174d' }, // pink
-  WD:  { accent: '#047857', soft: '#d1fae5', text: '#065f46' }, // green
+  MS:  { accent: '#1e40af', soft: '#dbeafe', text: '#1e3a8a' },
+  MD:  { accent: '#6d28d9', soft: '#ede9fe', text: '#5b21b6' },
+  MXD: { accent: '#c2410c', soft: '#ffedd5', text: '#9a3412' },
+  WS:  { accent: '#be185d', soft: '#fce7f3', text: '#9d174d' },
+  WD:  { accent: '#047857', soft: '#d1fae5', text: '#065f46' },
 };
 
-// =========================================================
-// Helpers
-// =========================================================
 const timeToMinutes = (t) => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-const fmtTime = (t) => {
-  const [h,m] = t.split(':').map(Number);
-  const p = h >= 12 ? 'PM' : 'AM';
-  return `${h%12||12}:${String(m).padStart(2,'0')} ${p}`;
-};
 const fmtTimeShort = (t) => {
   const [h,m] = t.split(':').map(Number);
   return `${h%12||12}:${String(m).padStart(2,'0')}`;
 };
 
-// Override helper — check all 3 sets of a parent playoff match for override
 const getPlayoffOverride = (matches, parentId) => {
   for (let setNum = 1; setNum <= 3; setNum++) {
     const sibling = matches[`${parentId}_s${setNum}`];
@@ -43,7 +32,6 @@ const getPlayoffOverride = (matches, parentId) => {
   return null;
 };
 
-// Standings calculation (same logic as main app)
 const normalizeName = (s) => s.replace(/\s+/g, '').toLowerCase();
 const teamPrefix = (s) => normalizeName(s.split('-')[0].trim());
 const namesMatch = (groupPlayer, schedulePlayer) => {
@@ -121,7 +109,6 @@ const getSemiWinner = (matches, semiId, standings) => {
   return null;
 };
 
-// Resolve display names for a playoff match (semi or final)
 const resolvePlayoffNames = (match, standings, matches) => {
   if (!match.isPlayoff) return { p1: match.p1, p2: match.p2 };
   const parentId = match.parentMatchId || match.id;
@@ -144,23 +131,17 @@ const resolvePlayoffNames = (match, standings, matches) => {
   return { p1: match.p1, p2: match.p2 };
 };
 
-// Activity-based LIVE indicator — actively scored in last 5 min
 const isActive = (row, now) => {
   if (!row || !row.last_activity || !now) return false;
   const last = new Date(row.last_activity).getTime();
   return (now.getTime() - last) < 5 * 60 * 1000;
 };
 
-// Collapse 3-set playoff match IDs to parent for grouping
 const parentIdOf = (match) => match.parentMatchId || match.id;
 
-// =========================================================
-// Hooks
-// =========================================================
 function useMatches() {
   const [matches, setMatches] = useState({});
   const [connected, setConnected] = useState(false);
-
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -170,7 +151,6 @@ function useMatches() {
       for (const r of data) m[r.id] = r;
       setMatches(m);
     })();
-
     const ch = supabase.channel('tv-matches')
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'matches' },
@@ -179,10 +159,8 @@ function useMatches() {
           setMatches(prev => ({ ...prev, [safe.id]: { ...prev[safe.id], ...safe } }));
         })
       .subscribe((status) => setConnected(status === 'SUBSCRIBED'));
-
     return () => { mounted = false; supabase.removeChannel(ch); };
   }, []);
-
   return { matches, connected };
 }
 
@@ -196,15 +174,13 @@ function useClock() {
   return now;
 }
 
-// =========================================================
-// Court card — the 3 big hero cards up top
-// =========================================================
+// Compact court card
 const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live }) => {
   if (!match) {
     return (
-      <div className="flex-1 rounded-xl border-2 border-gray-200 bg-white p-4 flex flex-col justify-center items-center min-h-[220px]">
-        <div className="text-xs font-bold tracking-widest text-gray-400 mb-2">COURT {courtNum}</div>
-        <div className="text-3xl font-bold text-gray-300">IDLE</div>
+      <div className="rounded-lg border-2 border-gray-200 bg-white p-2 flex flex-col justify-center items-center h-[100px]">
+        <div className="text-[10px] font-bold tracking-widest text-gray-400">COURT {courtNum}</div>
+        <div className="text-lg font-bold text-gray-300 mt-1">IDLE</div>
       </div>
     );
   }
@@ -212,71 +188,56 @@ const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live }) => {
   const hasScore = row && row.score1 != null && row.score2 != null;
   const complete = !!row?.is_final;
   const winner = hasScore ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
-
-  // Border/background based on state
   const borderColor = live ? c.accent : complete ? '#d1d5db' : c.soft;
   const borderWidth = live ? '3px' : '2px';
-  const bg = live ? '#fff' : complete ? '#f9fafb' : '#fff';
-
   return (
-    <div className="flex-1 rounded-xl p-4 min-h-[220px] flex flex-col relative"
-         style={{ border: `${borderWidth} solid ${borderColor}`, backgroundColor: bg }}>
-      {/* Top bar: court + category + live dot */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="text-xs font-bold tracking-widest text-gray-500">COURT {courtNum}</div>
-          <div className="px-2 py-0.5 text-[11px] font-bold tracking-widest rounded"
-               style={{ backgroundColor: c.soft, color: c.text }}>
-            {match.cat}
-          </div>
+    <div className="rounded-lg p-2 h-[100px] flex flex-col bg-white"
+         style={{ border: `${borderWidth} solid ${borderColor}` }}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] font-bold tracking-widest text-gray-500">CT {courtNum}</span>
+          <span className="px-1 py-0.5 text-[9px] font-bold tracking-widest rounded"
+                style={{ backgroundColor: c.soft, color: c.text }}>{match.cat}</span>
           {match.matchType === 'semi' && (
-            <div className="px-2 py-0.5 text-[10px] font-bold tracking-widest rounded"
-                 style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
-              SEMI {match.setNumber || ''}
-            </div>
+            <span className="px-1 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800">
+              SEMI{match.setNumber ? ` S${match.setNumber}` : ''}
+            </span>
           )}
           {match.matchType === 'final' && (
-            <div className="px-2 py-0.5 text-[10px] font-bold tracking-widest rounded"
-                 style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}>
-              FINAL {match.setNumber || ''}
-            </div>
+            <span className="px-1 py-0.5 text-[9px] font-bold rounded bg-red-100 text-red-800">
+              FINAL{match.setNumber ? ` S${match.setNumber}` : ''}
+            </span>
           )}
         </div>
         {live ? (
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold tracking-widest"
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-widest"
                style={{ backgroundColor: c.accent, color: '#fff' }}>
-            <span className="relative flex h-2 w-2">
+            <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-white opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
             </span>
             LIVE
           </div>
         ) : complete ? (
-          <div className="px-2 py-0.5 rounded text-[11px] font-bold tracking-widest bg-gray-100 text-gray-500">
-            COMPLETE
-          </div>
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-widest bg-gray-100 text-gray-500">DONE</span>
         ) : (
-          <div className="text-[11px] font-bold text-gray-400 tracking-widest">
-            {fmtTimeShort(match.time)}
-          </div>
+          <span className="text-[10px] font-bold text-gray-400 tracking-widest">{fmtTimeShort(match.time)}</span>
         )}
       </div>
-
-      {/* Players + scores */}
-      <div className="flex-1 flex flex-col justify-center gap-3">
+      <div className="flex-1 flex flex-col justify-center gap-0.5">
         <div className="flex items-center justify-between">
-          <div className={`text-2xl font-bold truncate pr-2 ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-400' : 'text-gray-800'}`}>
+          <div className={`text-sm font-bold truncate pr-2 ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-400' : 'text-gray-800'}`}>
             {winner === 1 && <span style={{ color: c.accent }}>▸ </span>}{p1Name}
           </div>
-          <div className={`text-5xl font-bold tabular-nums ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-300' : 'text-gray-600'}`}>
+          <div className={`text-2xl font-bold tabular-nums leading-none ${winner === 1 ? 'text-gray-900' : winner === 2 ? 'text-gray-300' : 'text-gray-600'}`}>
             {hasScore ? row.score1 : '–'}
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <div className={`text-2xl font-bold truncate pr-2 ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-400' : 'text-gray-800'}`}>
+          <div className={`text-sm font-bold truncate pr-2 ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-400' : 'text-gray-800'}`}>
             {winner === 2 && <span style={{ color: c.accent }}>▸ </span>}{p2Name}
           </div>
-          <div className={`text-5xl font-bold tabular-nums ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-300' : 'text-gray-600'}`}>
+          <div className={`text-2xl font-bold tabular-nums leading-none ${winner === 2 ? 'text-gray-900' : winner === 1 ? 'text-gray-300' : 'text-gray-600'}`}>
             {hasScore ? row.score2 : '–'}
           </div>
         </div>
@@ -285,65 +246,60 @@ const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live }) => {
   );
 };
 
-// =========================================================
-// Category standings block
-// =========================================================
-const CategoryStandings = ({ cat, standings, matches }) => {
+// Category column - ALL teams in groups + playoff section
+const CategoryColumn = ({ cat, standings, matches }) => {
   const c = CAT_COLORS[cat];
   const groups = standings[cat] || {};
-
-  // Get the semi-finals for this category
   const semiEntries = Object.entries(PLAYOFF_STRUCTURE).filter(([_, v]) => v.cat === cat);
   const finalEntry = Object.entries(FINALS_STRUCTURE).find(([_, v]) => v.cat === cat);
 
-  // Compute champion if available
   let champion = null;
+  let finalScoresStr = null;
   if (finalEntry) {
     const [finalId, finalInfo] = finalEntry;
     let t1 = 0, t2 = 0;
     const override = getPlayoffOverride(matches, finalId);
     const p1 = override?.p1 || getSemiWinner(matches, finalInfo.semi1, standings);
     const p2 = override?.p2 || getSemiWinner(matches, finalInfo.semi2, standings);
+    const sets = [];
     for (let s = 1; s <= 3; s++) {
       const row = matches[`${finalId}_s${s}`];
       if (row && row.is_final && row.score1 != null && row.score2 != null) {
         if (row.score1 > row.score2) t1++;
         else if (row.score2 > row.score1) t2++;
+        sets.push(`${row.score1}-${row.score2}`);
       }
     }
     if (t1 >= 2) champion = p1;
     else if (t2 >= 2) champion = p2;
+    if (sets.length > 0) finalScoresStr = sets.join(' ');
   }
 
   return (
-    <div className="rounded-lg overflow-hidden" style={{ border: `2px solid ${c.soft}` }}>
-      {/* Header */}
-      <div className="px-3 py-2 flex items-center justify-between" style={{ backgroundColor: c.soft }}>
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-0.5 text-[11px] font-bold tracking-widest rounded text-white" style={{ backgroundColor: c.accent }}>
-            {cat}
-          </span>
-          <span className="text-sm font-bold" style={{ color: c.text }}>{CAT_LABELS[cat]}</span>
+    <div className="rounded-lg overflow-hidden flex flex-col bg-white min-h-0" style={{ border: `1.5px solid ${c.soft}` }}>
+      <div className="px-2 py-1 flex items-center justify-between" style={{ backgroundColor: c.soft }}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-widest rounded text-white shrink-0" style={{ backgroundColor: c.accent }}>{cat}</span>
+          <span className="text-xs font-bold truncate" style={{ color: c.text }}>{CAT_LABELS[cat]}</span>
         </div>
         {champion && (
-          <div className="text-[11px] font-bold tracking-widest px-2 py-0.5 rounded bg-yellow-400 text-yellow-900">
+          <span className="text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-yellow-300 text-yellow-900 truncate ml-1 shrink-0">
             🏆 {champion}
-          </div>
+          </span>
         )}
       </div>
 
-      {/* Groups: show top 2 of each group */}
-      <div className="divide-y divide-gray-100">
+      <div className="flex-1 divide-y divide-gray-100 overflow-hidden">
         {Object.entries(groups).map(([groupName, rows]) => (
-          <div key={groupName} className="px-3 py-1.5">
-            <div className="text-[10px] font-bold tracking-widest text-gray-400 mb-1">{groupName}</div>
-            {rows.slice(0, 2).map((r, i) => {
+          <div key={groupName} className="px-2 py-0.5">
+            <div className="text-[9px] font-bold tracking-widest text-gray-400">{groupName.replace('Group ', 'GRP ')}</div>
+            {rows.map((r, i) => {
               const diff = r.pointsFor - r.pointsAgainst;
-              const advancing = r.played > 0;
+              const advancing = i < 2 && r.played > 0;
               return (
-                <div key={r.name} className="flex items-center justify-between py-0.5 text-sm">
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span className={`font-mono text-xs w-4 ${advancing ? 'font-bold' : 'text-gray-300'}`}
+                <div key={r.name} className="flex items-center justify-between py-0 text-[11px] leading-tight">
+                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                    <span className={`font-mono w-3 text-[10px] ${advancing ? 'font-bold' : 'text-gray-300'}`}
                           style={{ color: advancing ? c.accent : undefined }}>
                       {i + 1}
                     </span>
@@ -351,9 +307,9 @@ const CategoryStandings = ({ cat, standings, matches }) => {
                       {r.name}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 font-mono tabular-nums text-xs">
-                    <span className="text-gray-500">{r.won}–{r.lost}</span>
-                    <span className={`w-8 text-right ${diff > 0 ? 'text-green-600 font-bold' : diff < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                  <div className="flex items-center gap-1.5 font-mono tabular-nums text-[10px] shrink-0">
+                    <span className={advancing ? 'text-gray-700' : 'text-gray-300'}>{r.won}-{r.lost}</span>
+                    <span className={`w-7 text-right ${diff > 0 ? 'text-green-600 font-bold' : diff < 0 ? 'text-red-500' : 'text-gray-300'}`}>
                       {diff > 0 ? '+' : ''}{diff}
                     </span>
                   </div>
@@ -364,72 +320,78 @@ const CategoryStandings = ({ cat, standings, matches }) => {
         ))}
       </div>
 
-      {/* Playoff row — semis + final summary */}
+      {/* Playoffs strip - show full names with separate lines */}
       {semiEntries.length > 0 && (
-        <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
-          <div className="text-[10px] font-bold tracking-widest text-gray-400 mb-1">PLAYOFFS</div>
+        <div className="px-2 py-1 border-t border-gray-200 bg-gray-50">
+          <div className="text-[9px] font-bold tracking-widest text-gray-400">PLAYOFFS</div>
           {semiEntries.map(([semiId, semiInfo]) => {
             const winner = getSemiWinner(matches, semiId, standings);
             const override = getPlayoffOverride(matches, semiId);
             const p1 = override?.p1 || resolveSemiSlot(standings, semiInfo.slot1, cat);
             const p2 = override?.p2 || resolveSemiSlot(standings, semiInfo.slot2, cat);
+            // Check if any sets played
+            let setsPlayed = 0;
+            for (let s = 1; s <= 3; s++) {
+              const row = matches[`${semiId}_s${s}`];
+              if (row && row.is_final) setsPlayed++;
+            }
             return (
-              <div key={semiId} className="flex items-center gap-1.5 text-xs py-0.5">
-                <span className="text-[10px] text-gray-400 w-12 shrink-0">{semiInfo.label.replace(cat + ' ', '')}</span>
-                <span className={`truncate ${winner === p1 ? 'font-bold text-gray-900' : winner === p2 ? 'text-gray-400' : 'text-gray-600'}`}>
+              <div key={semiId} className="text-[10px] py-0 leading-tight">
+                <span className="text-gray-400 font-mono">S{semiInfo.label.match(/\d+/)?.[0] || ''}: </span>
+                <span className={winner === p1 ? 'font-bold text-gray-900' : winner === p2 ? 'text-gray-400' : 'text-gray-700'}>
                   {p1 || '—'}
                 </span>
-                <span className="text-gray-300">vs</span>
-                <span className={`truncate ${winner === p2 ? 'font-bold text-gray-900' : winner === p1 ? 'text-gray-400' : 'text-gray-600'}`}>
+                <span className="text-gray-300 mx-1">v</span>
+                <span className={winner === p2 ? 'font-bold text-gray-900' : winner === p1 ? 'text-gray-400' : 'text-gray-700'}>
                   {p2 || '—'}
                 </span>
+                {winner && <span className="ml-1 text-green-600 font-bold">✓</span>}
               </div>
             );
           })}
+          {finalEntry && (
+            <div className="text-[10px] py-0 leading-tight border-t border-gray-200 mt-0.5 pt-0.5">
+              <span className="text-amber-600 font-bold font-mono">F: </span>
+              {finalScoresStr ? (
+                <span className="text-gray-700">{finalScoresStr}</span>
+              ) : (
+                <span className="text-gray-400">pending</span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 };
 
-// =========================================================
-// Compact match row (for recent / upcoming strips)
-// =========================================================
+// Compact match row for recent/upcoming
 const CompactRow = ({ match, row, p1Name, p2Name }) => {
   const c = CAT_COLORS[match.cat] || CAT_COLORS.MS;
   const hasScore = row && row.score1 != null && row.score2 != null;
   const winner = hasScore ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
   return (
-    <div className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-white border border-gray-100 min-w-0">
-      <span className="font-mono text-[10px] text-gray-400 w-10 shrink-0">{fmtTimeShort(match.time)}</span>
+    <div className="flex items-center gap-1.5 text-[11px] py-0.5 px-1.5 rounded bg-white border border-gray-100 min-w-0 leading-tight">
+      <span className="font-mono text-[9px] text-gray-400 w-9 shrink-0">{fmtTimeShort(match.time)}</span>
       <span className="px-1 rounded text-[9px] font-bold tracking-wider shrink-0"
-            style={{ backgroundColor: c.soft, color: c.text }}>
-        {match.cat}
-      </span>
-      <span className={`truncate flex-1 min-w-0 ${winner === 1 ? 'font-bold text-gray-900' : 'text-gray-600'}`}>
-        {p1Name}
-      </span>
+            style={{ backgroundColor: c.soft, color: c.text }}>{match.cat}</span>
+      <span className={`truncate flex-1 min-w-0 ${winner === 1 ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{p1Name}</span>
       {hasScore && (
-        <span className="font-mono tabular-nums font-bold text-gray-900 shrink-0">
-          {row.score1}–{row.score2}
+        <span className="font-mono tabular-nums font-bold text-gray-900 shrink-0 text-[10px]">
+          {row.score1}-{row.score2}
         </span>
       )}
-      <span className={`truncate flex-1 min-w-0 text-right ${winner === 2 ? 'font-bold text-gray-900' : 'text-gray-600'}`}>
-        {p2Name}
-      </span>
+      <span className={`truncate flex-1 min-w-0 text-right ${winner === 2 ? 'font-bold text-gray-900' : 'text-gray-700'}`}>{p2Name}</span>
     </div>
   );
 };
 
-// =========================================================
 // Main Dashboard
-// =========================================================
 export default function TvDashboard() {
   const { matches, connected } = useMatches();
   const now = useClock();
   const standings = useMemo(() => calculateStandings(matches), [matches]);
 
-  // Build a resolved view of each schedule match (collapsing 3-set playoffs into one slot per parent)
   const allMatches = useMemo(() => {
     return SCHEDULE.map(m => {
       const row = matches[m.id] || null;
@@ -438,7 +400,6 @@ export default function TvDashboard() {
     });
   }, [matches, standings, now]);
 
-  // Live matches on each court — pick the most-recently-active one per court
   const liveByCourt = useMemo(() => {
     const result = {};
     for (const c of [1, 2, 3]) {
@@ -448,7 +409,6 @@ export default function TvDashboard() {
       if (actives.length > 0) {
         result[c] = actives[0];
       } else {
-        // Fall back to: next upcoming on this court, or most recent complete
         const upcoming = allMatches
           .filter(m => m.court === c && !m.row?.is_final)
           .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
@@ -465,77 +425,72 @@ export default function TvDashboard() {
     return result;
   }, [allMatches]);
 
-  // Recent completed (last 6), grouping playoffs by parent — take the latest set
   const recent = useMemo(() => {
-    const seenParents = new Set();
+    const seen = new Set();
     return allMatches
       .filter(m => m.row?.is_final)
       .sort((a, b) => new Date(b.row?.updated_at || 0) - new Date(a.row?.updated_at || 0))
       .filter(m => {
         const pid = parentIdOf(m);
-        if (seenParents.has(pid)) return false;
-        seenParents.add(pid);
+        if (seen.has(pid)) return false;
+        seen.add(pid);
         return true;
       })
-      .slice(0, 6);
+      .slice(0, 8);
   }, [allMatches]);
 
-  // Upcoming (next 6), also collapsing playoff parents to one entry
   const upcoming = useMemo(() => {
-    const seenParents = new Set();
+    const seen = new Set();
     return allMatches
       .filter(m => !m.row?.is_final && !m.active)
       .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time))
       .filter(m => {
         const pid = parentIdOf(m);
-        if (seenParents.has(pid)) return false;
-        seenParents.add(pid);
+        if (seen.has(pid)) return false;
+        seen.add(pid);
         return true;
       })
-      .slice(0, 6);
+      .slice(0, 8);
   }, [allMatches]);
 
-  // Completed count (non-playoff only, matching main app)
   const completedCount = SCHEDULE.filter(m => !m.isPlayoff && matches[m.id]?.is_final).length;
   const totalCount = SCHEDULE.filter(m => !m.isPlayoff).length;
 
   return (
-    <div className="min-h-screen w-screen bg-gray-50 text-gray-900 p-6 flex flex-col gap-4 overflow-hidden">
-      {/* ===== Header ===== */}
-      <header className="flex items-center justify-between shrink-0">
-        <div className="flex items-baseline gap-4">
+    <div className="h-screen w-screen bg-gray-50 text-gray-900 p-3 flex flex-col gap-2 overflow-hidden">
+      {/* Header */}
+      <header className="flex items-center justify-between shrink-0 px-1">
+        <div className="flex items-baseline gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-3xl">🏸</span>
-            <h1 className="text-3xl font-extrabold tracking-tight">MTCSV OPEN</h1>
+            <span className="text-2xl">🏸</span>
+            <h1 className="text-2xl font-extrabold tracking-tight">MTCSV OPEN</h1>
           </div>
-          <div className="text-sm text-gray-500 font-medium">
-            {now ? now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : '—'}
+          <div className="text-xs text-gray-500 font-medium">
+            {now ? now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'}
           </div>
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-[10px] font-bold tracking-widest text-gray-400">MATCHES</div>
-            <div className="text-2xl font-bold font-mono tabular-nums">
+            <div className="text-[9px] font-bold tracking-widest text-gray-400">MATCHES</div>
+            <div className="text-lg font-bold font-mono tabular-nums leading-none">
               {completedCount}<span className="text-gray-300">/{totalCount}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200">
-            <span className={`relative flex h-2 w-2`}>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-gray-200">
+            <span className="relative flex h-1.5 w-1.5">
               {connected && <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-green-400 opacity-75"></span>}
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${connected ? 'bg-green-500' : 'bg-gray-300'}`}></span>
+              <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${connected ? 'bg-green-500' : 'bg-gray-300'}`}></span>
             </span>
-            <span className="text-xs font-bold tracking-widest text-gray-600">
-              {connected ? 'LIVE' : 'OFFLINE'}
-            </span>
+            <span className="text-[10px] font-bold tracking-widest text-gray-600">{connected ? 'LIVE' : 'OFFLINE'}</span>
           </div>
-          <div className="text-3xl font-bold font-mono tabular-nums text-gray-900">
+          <div className="text-2xl font-bold font-mono tabular-nums text-gray-900 leading-none">
             {now ? now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—:—'}
           </div>
         </div>
       </header>
 
-      {/* ===== Live courts strip ===== */}
-      <section className="flex gap-3 shrink-0">
+      {/* Live courts strip */}
+      <section className="grid grid-cols-3 gap-2 shrink-0">
         {[1, 2, 3].map(cn => {
           const m = liveByCourt[cn];
           return (
@@ -552,21 +507,21 @@ export default function TvDashboard() {
         })}
       </section>
 
-      {/* ===== Standings grid (5 categories) ===== */}
-      <section className="flex-1 grid grid-cols-5 gap-3 min-h-0">
+      {/* Standings grid - 5 categories, full team lists */}
+      <section className="flex-1 grid grid-cols-5 gap-2 min-h-0">
         {Object.keys(GROUPS).map(cat => (
-          <CategoryStandings key={cat} cat={cat} standings={standings} matches={matches} />
+          <CategoryColumn key={cat} cat={cat} standings={standings} matches={matches} />
         ))}
       </section>
 
-      {/* ===== Recent + Upcoming strips ===== */}
+      {/* Recent + Upcoming */}
       <section className="grid grid-cols-2 gap-3 shrink-0">
         <div>
-          <div className="text-[10px] font-bold tracking-widest text-gray-400 mb-1 flex items-center gap-2">
+          <div className="text-[9px] font-bold tracking-widest text-gray-400 mb-0.5 flex items-center gap-1.5">
             <span>RECENT RESULTS</span>
             <div className="flex-1 h-px bg-gray-200"></div>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {recent.length === 0 ? (
               <div className="text-xs text-gray-300 italic py-1">No matches completed yet</div>
             ) : (
@@ -577,11 +532,11 @@ export default function TvDashboard() {
           </div>
         </div>
         <div>
-          <div className="text-[10px] font-bold tracking-widest text-gray-400 mb-1 flex items-center gap-2">
+          <div className="text-[9px] font-bold tracking-widest text-gray-400 mb-0.5 flex items-center gap-1.5">
             <span>UP NEXT</span>
             <div className="flex-1 h-px bg-gray-200"></div>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {upcoming.length === 0 ? (
               <div className="text-xs text-gray-300 italic py-1">No upcoming matches</div>
             ) : (
