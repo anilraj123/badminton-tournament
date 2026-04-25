@@ -351,17 +351,19 @@ const CategoryColumn = ({ cat, standings, matches }) => {
               return (
                 <div key={r.name} className="flex items-center justify-between py-0.5 text-xs leading-tight">
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <span className={`font-mono w-3 text-[11px] ${advancing ? 'font-bold' : 'text-gray-300'}`}
-                          style={{ color: advancing ? c.accent : undefined }}>
+                    <span className="font-mono w-3 text-[11px] font-bold"
+                          style={{ color: advancing ? c.accent : c.text }}>
                       {i + 1}
                     </span>
-                    <span className={`truncate ${advancing ? 'font-semibold text-gray-900' : 'text-gray-400'}`}>
+                    <span className={`truncate ${advancing ? 'font-bold' : 'font-medium'}`}
+                          style={{ color: advancing ? '#0a0a0a' : c.text }}>
                       {r.name}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 font-mono tabular-nums text-[11px] shrink-0">
-                    <span className={advancing ? 'text-gray-700' : 'text-gray-300'}>{r.won}-{r.lost}</span>
-                    <span className={`w-7 text-right ${diff > 0 ? 'text-green-600 font-bold' : diff < 0 ? 'text-red-500' : 'text-gray-300'}`}>
+                    <span style={{ color: advancing ? '#0a0a0a' : c.text, opacity: advancing ? 1 : 0.7 }}>{r.won}-{r.lost}</span>
+                    <span className={`w-7 text-right ${diff > 0 ? 'text-green-600 font-bold' : diff < 0 ? 'text-red-500 font-bold' : ''}`}
+                          style={diff === 0 ? { color: c.text, opacity: 0.5 } : undefined}>
                       {diff > 0 ? '+' : ''}{diff}
                     </span>
                   </div>
