@@ -22,6 +22,10 @@ create table public.matches (
   is_playoff boolean default false,
   stage text,                      -- 'Semi' | 'Final' | null
   label text,                      -- playoff human label
+  match_type text,                 -- 'prelim' | 'semi' | 'final'
+  scoring_format int,              -- points to win (e.g. 15 or 21)
+  is_final boolean default false,  -- umpire confirmed the final score
+  last_activity timestamptz,       -- last live-scoring tap (drives LIVE badge)
   pin text not null,               -- 4-digit umpire PIN for this match
   updated_at timestamptz default now(),
   updated_by text                  -- 'umpire' or 'admin'
@@ -44,7 +48,8 @@ create or replace function public.update_score(
   p_match_id text,
   p_score1 int,
   p_score2 int,
-  p_pin text
+  p_pin text,
+  p_is_final boolean default false
 ) returns jsonb
 language plpgsql security definer
 as $$
@@ -73,6 +78,8 @@ begin
   update public.matches
   set score1 = p_score1,
       score2 = p_score2,
+      is_final = p_is_final,
+      last_activity = now(),
       updated_at = now(),
       updated_by = v_updated_by
   where id = p_match_id;
@@ -100,7 +107,9 @@ create policy "matches_public_read" on public.matches for select using (true);
 create or replace view public.matches_public as
 select
   id, time_slot, court, category, p1, p2, umpire,
-  score1, score2, is_playoff, stage, label, updated_at, updated_by
+  score1, score2, is_playoff, stage, label,
+  match_type, scoring_format, is_final, last_activity,
+  updated_at, updated_by
 from public.matches;
 
 grant select on public.matches_public to anon, authenticated;

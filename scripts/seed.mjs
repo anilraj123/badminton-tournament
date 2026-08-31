@@ -57,6 +57,8 @@ async function seed() {
     is_playoff: !!m.isPlayoff,
     stage: m.stage || null,
     label: m.label || null,
+    match_type: m.matchType || null,
+    scoring_format: m.scoringFormat || null,
     pin: uniquePin(usedPins),
   }));
 

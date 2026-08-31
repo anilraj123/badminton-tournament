@@ -1,21 +1,40 @@
 # Badminton Tournament — Live Scores
 
-Next.js 14 + Supabase. Realtime score sync across all devices. Per-match umpire PINs + admin override.
+A reusable one-day badminton tournament site. Next.js 14 + Supabase. Realtime score sync across all devices. Per-match umpire PINs + admin override.
 
-## What you're deploying
+This repo ships as a **template with dummy teams** — a full working schedule (3 courts, 5 events, group stage → semis → finals) populated with placeholder names. Swap in your own tournament's details and go.
 
-- **Public read-only site** anyone can visit — schedule, live scores, standings, brackets, per-player view
+## What you get
+
+- **Public read-only site** anyone can visit — schedule, live scores, standings, brackets, per-player "My Matches" view
+- **TV dashboard** at `/tv` — big-screen live view for the gym
 - **Score entry** requires the 4-digit PIN printed on the umpire's slip
 - **Admin PIN** works for any match, used if an umpire PIN fails or to fix mistakes
 - **Realtime sync** via Supabase channels — score changes appear on every open tab within a second
+
+## Try it immediately (no accounts needed)
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. With no Supabase credentials configured, the site runs off the bundled schedule: **any 4-digit PIN** accepts score entry, and scores are stored in your browser (synced across tabs, not across devices). This is for previewing and editing — for a real tournament, set up Supabase below so all devices share live scores and PINs are enforced.
+
+## Customize for your tournament
+
+1. **`lib/tournament-config.mjs`** — tournament name, organizer, date, venue, contact, tagline, poster. Everything branded reads from this one file.
+2. **`lib/tournament-data.mjs`** — replace the dummy names: `SCHEDULE` (every match: time, court, category, players, umpire), `GROUPS` (round-robin groups), `TEAM_ROSTERS` (doubles team members), `PLAYOFF_STRUCTURE` / `FINALS_STRUCTURE` (how group ranks feed semis and finals). Names must match exactly across all of these.
+3. **`components/Rules.jsx`** — review the scoring format, tie-break, and general-rules text.
+4. **Poster** (optional) — drop an image into `public/` and point `poster` in the config at it.
 
 ## One-time setup (~15 minutes)
 
 ### 1. Create a Supabase project
 - Go to https://supabase.com → New project
-- Name it `badminton-tournament` (or whatever)
+- Name it after your tournament
 - Pick a strong DB password, save it
-- Region: US West (Oregon) — closest to San Jose
+- Region: whichever is closest to your venue
 - Wait for project to spin up (~2 min)
 
 ### 2. Run the schema
@@ -31,35 +50,28 @@ Next.js 14 + Supabase. Realtime score sync across all devices. Per-match umpire 
 ### 4. Copy your Supabase credentials
 - Go to **Project Settings → API**
 - Copy these three values:
-  - `Project URL` → this is your `SUPABASE_URL`
+  - `Project URL` → this is your `SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_URL`
   - `anon public` key → this is your `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `service_role secret` key → this is your `SUPABASE_SERVICE_ROLE_KEY` (used only for seeding — never commit, never deploy)
 
 ### 5. Seed the matches (generates PINs)
 ```bash
 cp .env.example .env.local
-# Edit .env.local and fill in the three Supabase values above
+# Edit .env.local and fill in the Supabase values above
 # Also set ADMIN_PIN to a 4-digit PIN of your choosing (e.g., 9472)
 
-npm install
 npm run seed
 ```
 This:
 - Generates a unique 4-digit PIN per match (collision-free, avoids your admin PIN)
-- Inserts all 82 matches into Supabase
+- Inserts every match into Supabase
 - Writes `pin-sheet.html` — **open it in a browser, print it, cut into strips, hand each umpire their slip**
 
-### 6. Deploy to Vercel
-```bash
-git init
-git add .
-git commit -m "Initial tournament site"
-# Create a new repo on GitHub (private is fine), then:
-git remote add origin git@github.com:anilraj123/badminton-tournament.git
-git push -u origin main
-```
+Re-run the seed any time you change `lib/tournament-data.mjs` (it upserts, but note re-seeding regenerates PINs — reprint the sheet).
 
-Then on [vercel.com](https://vercel.com):
+### 6. Deploy to Vercel
+
+Push the repo to GitHub, then on [vercel.com](https://vercel.com):
 1. **Add New Project** → Import your GitHub repo
 2. Framework Preset: **Next.js** (auto-detected)
 3. Environment Variables — add these two:
@@ -68,11 +80,11 @@ Then on [vercel.com](https://vercel.com):
    - ⚠️ Do **NOT** add the service role key — it's only for seeding
 4. Click **Deploy**. Takes ~60 seconds.
 
-You'll get a URL like `badminton-tournament-abc123.vercel.app`. That's your live site.
+You'll get a URL like `your-tournament.vercel.app`. That's your live site. (Note: Supabase free-tier projects pause after ~1 week of inactivity — create/resume the project close to tournament day.)
 
 ## Tournament day
 
-1. **Share the URL** with everyone (players, spectators, umpires)
+1. **Share the URL** with everyone (players, spectators, umpires); put `/tv` on the gym screen
 2. **Hand umpires their PIN slips**
 3. **Keep your admin PIN secret** until you need it
 4. When an umpire taps "Score" on their match, they enter the scores and the PIN. Changes appear live on every other device.
@@ -81,26 +93,30 @@ You'll get a URL like `badminton-tournament-abc123.vercel.app`. That's your live
 
 - **Umpire lost their PIN?** → Give them the admin PIN for that match only
 - **Wrong score entered?** → Anyone with the match PIN or admin PIN can tap "Edit" and correct it
-- **New match added?** → Edit `lib/tournament-data.mjs`, redeploy. Rare — avoid if possible.
+- **New match added?** → Edit `lib/tournament-data.mjs`, redeploy, re-seed. Rare — avoid if possible.
 - **Realtime stopped working?** → Check Supabase dashboard → Database → Replication; toggle off/on
 
 ## File map
 
 ```
 app/
-  layout.jsx         Root layout with fonts
-  page.jsx           Entry — renders TournamentApp
-  globals.css        Tailwind + reset
+  layout.jsx           Root layout with fonts
+  page.jsx             Entry — renders TournamentApp
+  tv/page.jsx          TV dashboard route
+  globals.css          Tailwind + reset
 components/
-  TournamentApp.jsx  Main component — tabs, scoring, realtime
+  TournamentApp.jsx    Main component — tabs, scoring, realtime
+  TvDashboard.jsx      Big-screen live dashboard
+  Rules.jsx            Rules tab content
 lib/
-  supabase.js        Client (anon key)
-  tournament-data.js Re-exports .mjs for Next.js
-  tournament-data.mjs Schedule, groups, team rosters
+  tournament-config.mjs  ← EDIT: branding, venue, contact
+  tournament-data.mjs    ← EDIT: schedule, groups, rosters
+  tournament-data.js     Re-exports .mjs for Next.js
+  supabase.js            Client (falls back to in-browser data when unconfigured)
 scripts/
-  seed.mjs           One-time: insert matches with PINs
+  seed.mjs             Insert matches with PINs + print sheet
 supabase/
-  schema.sql         Tables, RLS, update_score RPC
+  schema.sql           Tables, RLS, update_score RPC
 ```
 
 ## Security notes

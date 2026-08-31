@@ -6,6 +6,7 @@ import {
   SCHEDULE, GROUPS, CAT_LABELS, NAME_ALIASES,
   PLAYOFF_STRUCTURE, FINALS_STRUCTURE,
 } from '../lib/tournament-data';
+import { TOURNAMENT } from '../lib/tournament-config.mjs';
 
 // Light palette - bright gym, 10+ ft viewing
 const CAT_COLORS = {
@@ -531,7 +532,7 @@ export default function TvDashboard() {
         <div className="flex items-baseline gap-3">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🏸</span>
-            <h1 className="text-2xl font-extrabold tracking-tight">MTCSV OPEN</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight">{TOURNAMENT.name}</h1>
           </div>
           <div className="text-xs text-gray-500 font-medium">
             {now ? now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'}

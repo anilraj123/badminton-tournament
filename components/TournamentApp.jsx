@@ -4,6 +4,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff, Plus, Minus, RotateCcw, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES, PLAYOFF_STRUCTURE, FINALS_STRUCTURE } from '../lib/tournament-data';
+import { TOURNAMENT } from '../lib/tournament-config.mjs';
+
+const COURT_COUNT = new Set(SCHEDULE.filter(m => m.cat !== 'BREAK').map(m => m.court)).size;
+const EVENT_COUNT = Object.keys(CAT_LABELS).length;
 import Rules from './Rules';
 
 const CAT_COLORS = {
@@ -1181,7 +1185,7 @@ export default function TournamentApp() {
                 <span className="inline-block w-6 h-px bg-neutral-700"></span>
                 Badminton Tournament · Live
               </div>
-              <h1 className="font-display text-5xl md:text-7xl font-bold leading-none text-white">MTCSV OPEN</h1>
+              <h1 className="font-display text-5xl md:text-7xl font-bold leading-none text-white">{TOURNAMENT.name}</h1>
               <div className="flex items-baseline gap-3 mt-2 font-mono text-xs text-neutral-500 flex-wrap">
                 <span>{now ? now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '—'}</span>
                 <span className="text-neutral-700">·</span>
@@ -1200,11 +1204,11 @@ export default function TournamentApp() {
               </div>
               <div>
                 <div className="text-[10px] text-neutral-500 uppercase tracking-widest">Courts</div>
-                <div className="text-2xl font-bold tabular-nums text-white">3</div>
+                <div className="text-2xl font-bold tabular-nums text-white">{COURT_COUNT}</div>
               </div>
               <div>
                 <div className="text-[10px] text-neutral-500 uppercase tracking-widest">Events</div>
-                <div className="text-2xl font-bold tabular-nums text-white">5</div>
+                <div className="text-2xl font-bold tabular-nums text-white">{EVENT_COUNT}</div>
               </div>
             </div>
           </div>
@@ -1250,38 +1254,42 @@ export default function TournamentApp() {
       <footer className="border-t border-neutral-900 mt-12 py-8">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 md:gap-8 items-start">
-            <a href="/tournament-poster.jpg" target="_blank" rel="noopener noreferrer"
-               className="block shrink-0 transition-opacity hover:opacity-80"
-               title="View full poster">
-              <img src="/tournament-poster.jpg" alt="MTCSV Yuvajana Sakhyam Badminton Tournament poster"
-                   className="w-full md:w-48 h-auto rounded" style={{ border: '1px solid #2a2a2a' }} />
-            </a>
+            {TOURNAMENT.poster && (
+              <a href={TOURNAMENT.poster} target="_blank" rel="noopener noreferrer"
+                 className="block shrink-0 transition-opacity hover:opacity-80"
+                 title="View full poster">
+                <img src={TOURNAMENT.poster} alt={`${TOURNAMENT.fullTitle} poster`}
+                     className="w-full md:w-48 h-auto rounded" style={{ border: '1px solid #2a2a2a' }} />
+              </a>
+            )}
             <div className="flex-1">
               <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500 mb-2">
-                MTCSV Yuvajana Sakhyam Presents
+                {TOURNAMENT.presentedBy}
               </div>
               <div className="text-xl md:text-2xl font-bold text-white mb-1">
-                Badminton Tournament
+                {TOURNAMENT.fullTitle}
               </div>
-              <div className="text-sm text-amber-300/80 italic mb-4 font-serif">
-                "Serve for His Glory!"
-              </div>
+              {TOURNAMENT.tagline && (
+                <div className="text-sm text-amber-300/80 italic mb-4 font-serif">
+                  "{TOURNAMENT.tagline}"
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-neutral-300">
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">When</div>
-                  <div>Saturday, April 25, 2026 · 1 PM – 7 PM</div>
+                  <div>{TOURNAMENT.date} · {TOURNAMENT.timeRange}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Where</div>
-                  <div>Kerala House · 40374 Fremont Blvd, Fremont, CA 94538</div>
+                  <div>{TOURNAMENT.venue.name} · {TOURNAMENT.venue.address}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Contact</div>
-                  <div>Nishant George · <a href="tel:+12675309577" className="text-white hover:text-amber-300 transition-colors">267-530-9577</a></div>
+                  <div>{TOURNAMENT.contact.name} · <a href={`tel:${TOURNAMENT.contact.tel}`} className="text-white hover:text-amber-300 transition-colors">{TOURNAMENT.contact.phone}</a></div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Categories</div>
-                  <div>Men's/Women's Singles, Doubles, Mixed Doubles · Age 13+</div>
+                  <div>{TOURNAMENT.categoriesBlurb}</div>
                 </div>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { MapPin, Calendar, Clock, Trophy, AlertCircle, Users } from 'lucide-react';
+import { TOURNAMENT } from '../lib/tournament-config.mjs';
 
 const Rules = () => {
   return (
@@ -7,9 +8,9 @@ const Rules = () => {
       <div className="mb-8 p-6 rounded-lg bg-gradient-to-br from-blue-950 to-neutral-900 border border-blue-800">
         <div className="flex items-center gap-3 mb-3">
           <Trophy className="w-8 h-8 text-blue-400" />
-          <h1 className="text-2xl font-bold text-white">MTCSV Badminton Tournament 2026</h1>
+          <h1 className="text-2xl font-bold text-white">{TOURNAMENT.fullTitle}</h1>
         </div>
-        <p className="text-blue-200 text-sm">Mar Thoma Church of Silicon Valley · Yuvajana Sakhyam</p>
+        <p className="text-blue-200 text-sm">{TOURNAMENT.organizer}</p>
       </div>
 
       {/* Key Details */}
@@ -19,9 +20,9 @@ const Rules = () => {
             <Calendar className="w-5 h-5 text-blue-400" />
             <h3 className="font-bold text-white">Date & Time</h3>
           </div>
-          <p className="text-neutral-300 text-sm">Saturday, April 25, 2026</p>
-          <p className="text-neutral-300 text-sm">1:00 PM – 7:00 PM</p>
-          <p className="text-neutral-400 text-xs mt-1">Check-in: 12:30 PM</p>
+          <p className="text-neutral-300 text-sm">{TOURNAMENT.date}</p>
+          <p className="text-neutral-300 text-sm">{TOURNAMENT.timeRange}</p>
+          <p className="text-neutral-400 text-xs mt-1">{TOURNAMENT.checkIn}</p>
         </div>
 
         <div className="p-4 rounded-lg bg-neutral-900 border border-neutral-800">
@@ -29,9 +30,8 @@ const Rules = () => {
             <MapPin className="w-5 h-5 text-blue-400" />
             <h3 className="font-bold text-white">Location</h3>
           </div>
-          <p className="text-neutral-300 text-sm">Kerala House</p>
-          <p className="text-neutral-400 text-xs">40374 Fremont Blvd</p>
-          <p className="text-neutral-400 text-xs">Fremont, CA 94538</p>
+          <p className="text-neutral-300 text-sm">{TOURNAMENT.venue.name}</p>
+          <p className="text-neutral-400 text-xs">{TOURNAMENT.venue.address}</p>
         </div>
       </div>
 
@@ -137,11 +137,13 @@ const Rules = () => {
 
       {/* Footer */}
       <div className="p-5 rounded-lg bg-blue-950 border border-blue-800 text-center">
-        <p className="text-blue-200 text-sm font-medium mb-1">
-          "Serve for His Glory!"
-        </p>
+        {TOURNAMENT.tagline && (
+          <p className="text-blue-200 text-sm font-medium mb-1">
+            "{TOURNAMENT.tagline}"
+          </p>
+        )}
         <p className="text-blue-300 text-xs">
-          Contact: Nishant George · 267-530-9577
+          Contact: {TOURNAMENT.contact.name} · {TOURNAMENT.contact.phone}
         </p>
       </div>
     </div>
