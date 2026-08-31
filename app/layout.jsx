@@ -1,6 +1,8 @@
+import { TOURNAMENT } from '../lib/tournament-config.mjs';
+
 export const metadata = {
-  title: 'MTCSV Open — Live',
-  description: 'Live scores, standings, and brackets · Serve for His Glory!',
+  title: TOURNAMENT.siteTitle,
+  description: ['Live scores, standings, and brackets', TOURNAMENT.tagline].filter(Boolean).join(' · '),
 };
 
 export default function RootLayout({ children }) {
