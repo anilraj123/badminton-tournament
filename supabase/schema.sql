@@ -96,6 +96,17 @@ alter table public.config enable row level security;
 -- Note: we exclude the PIN column from the public view below
 create policy "matches_public_read" on public.matches for select using (true);
 
+-- Column-level protection: RLS alone is row-level, and Supabase's default
+-- grants would let anon read every column — including pin — both directly
+-- and in realtime payloads. Revoke table SELECT and re-grant every column
+-- EXCEPT pin. Realtime honors column privileges, so payloads omit pin too.
+revoke select on table public.matches from anon, authenticated;
+grant select (id, time_slot, court, category, p1, p2, umpire,
+              score1, score2, is_playoff, stage, label,
+              match_type, scoring_format, is_final, last_activity,
+              updated_at, updated_by)
+  on public.matches to anon, authenticated;
+
 -- NO direct insert/update/delete policies → all writes must go through update_score()
 -- (security definer function bypasses RLS)
 
