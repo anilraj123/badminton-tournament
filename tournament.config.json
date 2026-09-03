@@ -1,0 +1,28 @@
+{
+  "_comment": "EDIT THIS FILE for your tournament. Every branded thing on the site reads from here. 'name' is the big header; 'siteTitle'/'tvTitle' are browser-tab titles; 'tagline' may be '' to hide; 'poster' is a path under public/ or null to hide the poster block.",
+
+  "name": "SPRING OPEN",
+  "siteTitle": "Spring Open — Live",
+  "tvTitle": "Spring Open — Dashboard",
+
+  "fullTitle": "Spring Open Badminton Tournament",
+  "organizer": "Your Club or Organization",
+  "presentedBy": "Your Organization Presents",
+  "tagline": "",
+
+  "date": "Saturday, June 1, 2026",
+  "timeRange": "1:00 PM – 7:00 PM",
+  "checkIn": "Check-in: 12:30 PM",
+  "venue": {
+    "name": "Community Sports Hall",
+    "address": "123 Main St, Your City, ST 00000"
+  },
+  "contact": {
+    "name": "Tournament Desk",
+    "phone": "555-0100",
+    "tel": "+15550100"
+  },
+  "categoriesBlurb": "Men's/Women's Singles, Doubles, Mixed Doubles",
+
+  "poster": null
+}

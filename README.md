@@ -23,7 +23,7 @@ Open http://localhost:3000. With no Supabase credentials configured, the site ru
 
 ## Customize for your tournament
 
-1. **`lib/tournament-config.mjs`** — tournament name, organizer, date, venue, contact, tagline, poster. Everything branded reads from this one file.
+1. **`tournament.config.json`** (repo root) — tournament name, organizer, date, venue, contact, tagline, poster. Everything branded reads from this one file; it's plain JSON, so you can edit it directly in the GitHub web editor.
 2. **`lib/tournament-data.mjs`** — replace the dummy names: `SCHEDULE` (every match: time, court, category, players, umpire), `GROUPS` (round-robin groups), `TEAM_ROSTERS` (doubles team members), `PLAYOFF_STRUCTURE` / `FINALS_STRUCTURE` (how group ranks feed semis and finals). Names must match exactly across all of these.
 3. **`components/Rules.jsx`** — review the scoring format, tie-break, and general-rules text.
 4. **Poster** (optional) — drop an image into `public/` and point `poster` in the config at it.
@@ -99,6 +99,7 @@ You'll get a URL like `your-tournament.vercel.app`. That's your live site. (Note
 ## File map
 
 ```
+tournament.config.json   ← EDIT: name, dates, venue, contact
 app/
   layout.jsx           Root layout with fonts
   page.jsx             Entry — renders TournamentApp
@@ -109,7 +110,7 @@ components/
   TvDashboard.jsx      Big-screen live dashboard
   Rules.jsx            Rules tab content
 lib/
-  tournament-config.mjs  ← EDIT: branding, venue, contact
+  tournament-config.mjs  Loads /tournament.config.json
   tournament-data.mjs    ← EDIT: schedule, groups, rosters
   tournament-data.js     Re-exports .mjs for Next.js
   supabase.js            Client (falls back to in-browser data when unconfigured)
