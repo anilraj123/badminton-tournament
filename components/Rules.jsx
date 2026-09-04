@@ -59,9 +59,11 @@ const Rules = () => {
           <div className="p-4 rounded-lg bg-neutral-900 border border-neutral-800">
             <div className="font-bold text-blue-300 mb-2">Group Stage</div>
             <ul className="space-y-1.5 text-neutral-300">
-              <li>• Men's Doubles: <span className="text-white">8 groups</span> (A–H) of 4 teams</li>
+              <li>• Men's Doubles: <span className="text-white">4 groups</span> (A–D) of 6 teams</li>
+              <li>• Men's Singles: <span className="text-white">4 groups</span> (A–D) of 4 players</li>
+              <li>• Women's Doubles & Mixed Doubles: <span className="text-white">2 groups</span> (A–B) of 4 teams</li>
               <li>• Round robin within each group</li>
-              <li>• <span className="text-white">Top 2</span> from each group qualify for the next round</li>
+              <li>• <span className="text-white">Top 2</span> from each group qualify for the knockout rounds</li>
             </ul>
           </div>
 
@@ -76,7 +78,9 @@ const Rules = () => {
           <div className="p-4 rounded-lg bg-neutral-900 border border-neutral-800">
             <div className="font-bold text-blue-300 mb-2">Knockout Rounds</div>
             <ul className="space-y-1.5 text-neutral-300">
-              <li>• Bracket to be announced after the group stage</li>
+              <li>• MD & MS: Quarterfinals → Semifinals → Final</li>
+              <li>• WD & MXD: Semifinals → Final</li>
+              <li>• Group winners face runners-up from another group; group-mates can only meet again in the final</li>
             </ul>
           </div>
         </div>
