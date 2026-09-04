@@ -6,7 +6,12 @@ import {
   SCHEDULE, GROUPS, CAT_LABELS, NAME_ALIASES,
   PLAYOFF_STRUCTURE, FINALS_STRUCTURE,
 } from '../lib/tournament-data';
+import { ADVANCE_PER_GROUP } from '../lib/tournament-data';
 import { TOURNAMENT } from '../lib/tournament-config.mjs';
+
+const COURTS = [...new Set(SCHEDULE.map(m => m.court))].sort((a, b) => a - b);
+const COURT_COLS = Math.min(COURTS.length, 6);
+const CAT_COLS = Math.max(Object.keys(GROUPS).length, 1);
 
 // Light palette - bright gym, 10+ ft viewing
 const CAT_COLORS = {
@@ -168,7 +173,7 @@ const advanceCountForGroup = (cat, groupName) => {
     if (v.slot1?.group === groupName) count = Math.max(count, v.slot1.rank);
     if (v.slot2?.group === groupName) count = Math.max(count, v.slot2.rank);
   }
-  return count || 1;
+  return count || ADVANCE_PER_GROUP[cat] || 1;
 };
 
 const isActive = (row, now) => {
@@ -342,7 +347,8 @@ const CategoryColumn = ({ cat, standings, matches }) => {
         )}
       </div>
 
-      <div className="divide-y divide-gray-100">
+      <div className={CAT_COLS === 1 ? 'grid gap-x-4 divide-gray-100' : 'divide-y divide-gray-100'}
+           style={CAT_COLS === 1 ? { gridTemplateColumns: `repeat(${Math.min(Object.keys(groups).length || 1, 6)}, minmax(0, 1fr))` } : undefined}>
         {Object.entries(groups).map(([groupName, rows]) => (
           <div key={groupName} className="px-2.5 py-1">
             <div className="text-[10px] font-bold tracking-widest text-gray-400">{groupName.replace('Group ', 'GRP ')}</div>
@@ -499,7 +505,7 @@ export default function TvDashboard() {
 
   const liveByCourt = useMemo(() => {
     const result = {};
-    for (const c of [1, 2, 3]) {
+    for (const c of COURTS) {
       const actives = allMatches
         .filter(m => m.court === c && m.active && !m.row?.is_final)
         .sort((a, b) => new Date(b.row?.last_activity || 0) - new Date(a.row?.last_activity || 0));
@@ -559,8 +565,8 @@ export default function TvDashboard() {
       </header>
 
       {/* Live courts strip */}
-      <section className="grid grid-cols-3 gap-2 shrink-0">
-        {[1, 2, 3].map(cn => {
+      <section className="grid gap-2 shrink-0" style={{ gridTemplateColumns: `repeat(${COURT_COLS}, minmax(0, 1fr))` }}>
+        {COURTS.map(cn => {
           const m = liveByCourt[cn];
           return (
             <CourtCard
@@ -579,15 +585,15 @@ export default function TvDashboard() {
       </section>
 
       {/* Standings — content-sized, NOT flex-1 */}
-      <section className="grid grid-cols-5 gap-2 shrink-0">
+      <section className="grid gap-2 shrink-0" style={{ gridTemplateColumns: `repeat(${CAT_COLS}, minmax(0, 1fr))` }}>
         {Object.keys(GROUPS).map(cat => (
           <CategoryColumn key={cat} cat={cat} standings={standings} matches={matches} />
         ))}
       </section>
 
       {/* Court timelines fill the remaining vertical space */}
-      <section className="grid grid-cols-3 gap-2 flex-1 min-h-0">
-        {[1, 2, 3].map(cn => (
+      <section className="grid gap-2 flex-1 min-h-0" style={{ gridTemplateColumns: `repeat(${COURT_COLS}, minmax(0, 1fr))` }}>
+        {COURTS.map(cn => (
           <CourtTimeline key={cn} courtNum={cn} allMatches={allMatches} now={now} />
         ))}
       </section>

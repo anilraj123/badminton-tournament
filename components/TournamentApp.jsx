@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff, Plus, Minus, RotateCcw, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES, PLAYOFF_STRUCTURE, FINALS_STRUCTURE } from '../lib/tournament-data';
+import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES, PLAYOFF_STRUCTURE, FINALS_STRUCTURE, ADVANCE_PER_GROUP } from '../lib/tournament-data';
 import { TOURNAMENT } from '../lib/tournament-config.mjs';
 
 const COURT_COUNT = new Set(SCHEDULE.filter(m => m.cat !== 'BREAK').map(m => m.court)).size;
@@ -232,7 +232,7 @@ const advanceCountForGroup = (cat, groupName) => {
     if (v.slot1?.group === groupName) count = Math.max(count, v.slot1.rank);
     if (v.slot2?.group === groupName) count = Math.max(count, v.slot2.rank);
   }
-  return count || 1;
+  return count || ADVANCE_PER_GROUP[cat] || 1;
 };
 
 // Calculate the winner of a semi-final based on 3-set scores
@@ -783,7 +783,7 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
   return (
     <div>
       <div className="flex gap-1.5 mb-6 flex-wrap">
-        {['ALL', 'MS', 'MD', 'MXD', 'WS', 'WD'].map(cat => (
+        {['ALL', ...Object.keys(CAT_LABELS)].map(cat => (
           <button key={cat} onClick={() => setCatFilter(cat)}
             className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all"
             style={{
@@ -1046,7 +1046,7 @@ const StandingsTab = ({ matches, standings }) => {
               </tbody>
             </table>
             <div className="px-4 py-2 border-t border-neutral-800 text-[10px] text-neutral-600 tracking-wider">
-              <span style={{ color: CAT_COLORS[activeCat].accent }}>●</span> Top {advanceCountForGroup(activeCat, groupName)} advance{advanceCountForGroup(activeCat, groupName) === 1 ? 's' : ''} to semifinals
+              <span style={{ color: CAT_COLORS[activeCat].accent }}>●</span> Top {advanceCountForGroup(activeCat, groupName)} advance{advanceCountForGroup(activeCat, groupName) === 1 ? 's' : ''} to the next round
             </div>
           </div>
         ))}
