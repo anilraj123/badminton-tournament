@@ -43,13 +43,8 @@ const Rules = () => {
         </div>
         <div className="space-y-3 text-sm">
           <div className="p-3 rounded bg-neutral-900/50 border border-neutral-800">
-            <div className="font-bold text-orange-300 mb-1">Preliminary Rounds</div>
-            <div className="text-neutral-300">ONE set to <span className="font-bold text-white">15 points</span></div>
-          </div>
-          <div className="p-3 rounded bg-neutral-900/50 border border-neutral-800">
-            <div className="font-bold text-orange-300 mb-1">Semi-Finals & Finals</div>
-            <div className="text-neutral-300">THREE sets of <span className="font-bold text-white">21 points</span> each</div>
-            <div className="text-neutral-400 text-xs mt-1">May change to 15 points if running out of time</div>
+            <div className="font-bold text-orange-300 mb-1">All Rounds</div>
+            <div className="text-neutral-300">ONE game to <span className="font-bold text-white">21 points</span></div>
           </div>
         </div>
       </div>
@@ -64,9 +59,9 @@ const Rules = () => {
           <div className="p-4 rounded-lg bg-neutral-900 border border-neutral-800">
             <div className="font-bold text-blue-300 mb-2">Group Stage</div>
             <ul className="space-y-1.5 text-neutral-300">
-              <li>• MS, MD, MXD: <span className="text-white">4 groups</span> (A, B, C, D) → Top 1 from each advances to semi-finals</li>
-              <li>• WS, WD: <span className="text-white">2 groups</span> (A, B) → Top 2 from each advances to semi-finals</li>
+              <li>• Men's Doubles: <span className="text-white">6 groups</span> (A–F) of 4 teams</li>
               <li>• Round robin within each group</li>
+              <li>• <span className="text-white">Top 2</span> from each group qualify for the next round</li>
             </ul>
           </div>
 
@@ -79,10 +74,9 @@ const Rules = () => {
           </div>
 
           <div className="p-4 rounded-lg bg-neutral-900 border border-neutral-800">
-            <div className="font-bold text-blue-300 mb-2">Semi-Final Matchups</div>
+            <div className="font-bold text-blue-300 mb-2">Knockout Rounds</div>
             <ul className="space-y-1.5 text-neutral-300">
-              <li>• Group A 1st place vs Group B 2nd place</li>
-              <li>• Group B 1st place vs Group A 2nd place</li>
+              <li>• Bracket to be announced after the group stage</li>
             </ul>
           </div>
         </div>

@@ -1,18 +1,18 @@
 {
   "_comment": "EDIT THIS FILE for your tournament. Every branded thing on the site reads from here. 'name' is the big header; 'siteTitle'/'tvTitle' are browser-tab titles; 'tagline' may be '' to hide; 'poster' is a path under public/ or null to hide the poster block.",
 
-  "name": "SPRING OPEN",
-  "siteTitle": "Spring Open — Live",
-  "tvTitle": "Spring Open — Dashboard",
+  "name": "ECUM BADMINTON",
+  "siteTitle": "ECUM Badminton — Live",
+  "tvTitle": "ECUM Badminton — Dashboard",
 
-  "fullTitle": "Spring Open Badminton Tournament",
-  "organizer": "Your Club or Organization",
-  "presentedBy": "Your Organization Presents",
+  "fullTitle": "ECUM Badminton Tournament 2026",
+  "organizer": "ECUM",
+  "presentedBy": "ECUM Presents",
   "tagline": "",
 
-  "date": "Saturday, June 1, 2026",
-  "timeRange": "1:00 PM – 7:00 PM",
-  "checkIn": "Check-in: 12:30 PM",
+  "date": "Saturday, September 5, 2026",
+  "timeRange": "9:00 AM onwards",
+  "checkIn": "Check-in: 8:30 AM",
   "venue": {
     "name": "Community Sports Hall",
     "address": "123 Main St, Your City, ST 00000"
