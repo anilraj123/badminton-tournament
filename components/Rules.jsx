@@ -43,8 +43,16 @@ const Rules = () => {
         </div>
         <div className="space-y-3 text-sm">
           <div className="p-3 rounded bg-neutral-900/50 border border-neutral-800">
-            <div className="font-bold text-orange-300 mb-1">All Rounds</div>
-            <div className="text-neutral-300">ONE game to <span className="font-bold text-white">21 points</span></div>
+            <div className="font-bold text-orange-300 mb-1">Men's Singles & Men's Doubles</div>
+            <div className="text-neutral-300">Games to <span className="font-bold text-white">21 points</span> (maximum <span className="font-bold text-white">30</span>)</div>
+          </div>
+          <div className="p-3 rounded bg-neutral-900/50 border border-neutral-800">
+            <div className="font-bold text-orange-300 mb-1">Women's Doubles & Mixed Doubles</div>
+            <div className="text-neutral-300">Games to <span className="font-bold text-white">15 points</span> (maximum <span className="font-bold text-white">21</span>)</div>
+          </div>
+          <div className="p-3 rounded bg-neutral-900/50 border border-neutral-800">
+            <div className="font-bold text-orange-300 mb-1">Sets</div>
+            <div className="text-neutral-300">Prelims & Quarterfinals: <span className="font-bold text-white">ONE set</span> · Semis & Finals: <span className="font-bold text-white">THREE sets</span></div>
           </div>
         </div>
       </div>
@@ -59,11 +67,12 @@ const Rules = () => {
           <div className="p-4 rounded-lg bg-neutral-900 border border-neutral-800">
             <div className="font-bold text-blue-300 mb-2">Group Stage</div>
             <ul className="space-y-1.5 text-neutral-300">
-              <li>• Men's Doubles: <span className="text-white">4 groups</span> (A–D) of 6 teams</li>
-              <li>• Men's Singles: <span className="text-white">4 groups</span> (A–D) of 4 players</li>
-              <li>• Women's Doubles & Mixed Doubles: <span className="text-white">2 groups</span> (A–B) of 4 teams</li>
+              <li>• Men's Doubles: <span className="text-white">24 teams</span> in 4 groups</li>
+              <li>• Men's Singles: <span className="text-white">16 players</span> in 4 groups</li>
+              <li>• Mixed Doubles: <span className="text-white">10 teams</span> in 2 groups</li>
+              <li>• Women's Doubles: <span className="text-white">9 teams</span> in 2 groups</li>
               <li>• Round robin within each group</li>
-              <li>• <span className="text-white">Top 2</span> from each group qualify for the knockout rounds</li>
+              <li>• <span className="text-white">Top 2</span> from each group advance to the next stage</li>
             </ul>
           </div>
 
@@ -100,10 +109,13 @@ const Rules = () => {
             • Umpires have the <span className="text-white">final say</span> at any point in the match
           </li>
           <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
-            • Teams/players <span className="text-white">late by more than 10 minutes</span> will forfeit and points awarded to opposition
+            • Teams/players <span className="text-white">late by more than 10 minutes</span> from the scheduled start forfeit; points awarded to the opposition (recorded 1–0)
           </li>
           <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
-            • Committee provides <span className="text-white">1 birdie per set</span>; teams can bring extras if both agree
+            • Committee provides <span className="text-white">1 birdie per set</span>; teams can bring extras if both agree. Birdies for practice matches are not provided
+          </li>
+          <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
+            • Registration requires membership of a <span className="text-white">Kerala-based church</span> (Bay Area or India)
           </li>
           <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
             • All Tournament Committee decisions are <span className="text-white">final</span>
@@ -116,19 +128,16 @@ const Rules = () => {
         <h2 className="text-lg font-bold text-white mb-4">What to Bring</h2>
         <ul className="space-y-2 text-sm text-neutral-300">
           <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
-            • Your rackets (and extras if possible)
+            • Your rackets, plus extras — <span className="text-white">no rentals available</span> at the facility
           </li>
           <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
-            • Non-marking shoes with proper grip (badminton shoes ideal)
+            • Good quality non-marking shoes with proper grip (badminton shoes ideal)
           </li>
           <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
-            • Water and refreshments
+            • Water and refreshments for you and your kids — <span className="text-white">lunch will be served</span>
           </li>
           <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
-            • Foldable chairs (limited seating available)
-          </li>
-          <li className="p-3 rounded bg-neutral-900 border border-neutral-800">
-            • Optional: Board games, chess, cards for casual play
+            • Foldable chairs (limited bench seating at the center)
           </li>
         </ul>
       </div>

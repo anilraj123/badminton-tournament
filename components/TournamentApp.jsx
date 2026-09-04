@@ -200,14 +200,30 @@ const calculateStandings = (matches) => {
       }
     }
   });
-  // Rank: wins, then point differential, then head-to-head (per the rules:
-  // 2-way tie -> head-to-head winner; 3-way -> differential decides first).
-  Object.entries(st).forEach(([cat, groups]) => Object.values(groups).forEach(g => g.sort((a,b) => {
-    if (b.won !== a.won) return b.won - a.won;
-    const dd = (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
-    if (dd !== 0) return dd;
-    return -headToHead(cat, a.name, b.name, matches);
-  })));
+  // Rank by wins; break ties per the flyer: a 2-way tie goes to the
+  // head-to-head winner, a 3-way (or larger) tie is ordered by point
+  // differential (head-to-head as a last resort when diffs are equal too).
+  const byDiff = (a, b) => (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+  Object.entries(st).forEach(([cat, groups]) => Object.entries(groups).forEach(([gName, g]) => {
+    g.sort((a, b) => b.won - a.won);
+    const ordered = [];
+    let i = 0;
+    while (i < g.length) {
+      let j = i;
+      while (j < g.length && g[j].won === g[i].won) j++;
+      const tier = g.slice(i, j);
+      if (tier.length === 2) {
+        const h = headToHead(cat, tier[0].name, tier[1].name, matches);
+        if (h < 0) tier.reverse();
+        else if (h === 0) tier.sort(byDiff);
+      } else if (tier.length > 2) {
+        tier.sort((a, b) => byDiff(a, b) || -headToHead(cat, a.name, b.name, matches));
+      }
+      ordered.push(...tier);
+      i = j;
+    }
+    groups[gName] = ordered;
+  }));
   return st;
 };
 
@@ -314,14 +330,33 @@ const resolveKnockoutSlot = (slot, cat, standings, matches) => {
   return null;
 };
 
+// Count decided sets for a best-of-3 knockout match. Returns [side1, side2].
+const knockoutSetWins = (matches, id) => {
+  let t1 = 0, t2 = 0;
+  for (let s = 1; s <= 3; s++) {
+    const row = matches[`${id}_s${s}`];
+    if (row?.is_final && row.score1 != null && row.score2 != null) {
+      if (row.score1 > row.score2) t1++;
+      else if (row.score2 > row.score1) t2++;
+    }
+  }
+  return [t1, t2];
+};
+
 const getKnockoutWinner = (matches, id, standings) => {
   const k = KNOCKOUT[id];
   if (!k) return null;
-  const row = matches[id];
-  if (!row || !row.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return null;
   const s1 = resolveKnockoutSlot(k.slot1, k.cat, standings, matches);
   const s2 = resolveKnockoutSlot(k.slot2, k.cat, standings, matches);
   if (!s1 || s1.tied || !s2 || s2.tied) return null;
+  if (k.sets === 3) {
+    const [t1, t2] = knockoutSetWins(matches, id);
+    if (t1 >= 2) return s1.names[0];
+    if (t2 >= 2) return s2.names[0];
+    return null;
+  }
+  const row = matches[id];
+  if (!row || !row.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return null;
   return row.score1 > row.score2 ? s1.names[0] : s2.names[0];
 };
 
@@ -1176,7 +1211,7 @@ const KnockoutTable = ({ cat, matches, standings }) => {
   return (
     <div className="mt-10">
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wider">Knockout — Single Game to 21</h2>
+        <h2 className="text-lg font-bold text-white uppercase tracking-wider">Knockout — QF One Game · SF & Final Best of 3</h2>
         {champion && (
           <span className="px-2 py-1 text-xs font-bold rounded bg-yellow-300 text-yellow-900">🏆 CHAMPION · {champion}</span>
         )}
@@ -1192,13 +1227,25 @@ const KnockoutTable = ({ cat, matches, standings }) => {
               </div>
               <div className="divide-y divide-neutral-900">
                 {roundEntries.map(([id, k]) => {
-                  const sched = SCHEDULE.find(m => m.id === id);
-                  const row = matches[id];
+                  const sched = SCHEDULE.find(m => (m.parentMatchId || m.id) === id);
                   const resolved = sched ? resolvePlayoffNames(sched, standings, matches) : { p1: null, p2: null };
                   const p1 = resolved.p1 || sched?.p1 || '—';
                   const p2 = resolved.p2 || sched?.p2 || '—';
-                  const done = row?.is_final && row.score1 != null && row.score2 != null;
-                  const w = done ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
+                  let scoreStr = 'vs', w = 0;
+                  if (k.sets === 3) {
+                    const [t1, t2] = knockoutSetWins(matches, id);
+                    const sets = [];
+                    for (let s = 1; s <= 3; s++) {
+                      const r = matches[`${id}_s${s}`];
+                      if (r?.is_final && r.score1 != null && r.score2 != null) sets.push(`${r.score1}-${r.score2}`);
+                    }
+                    if (sets.length) scoreStr = sets.join(' · ');
+                    w = t1 >= 2 ? 1 : t2 >= 2 ? 2 : 0;
+                  } else {
+                    const row = matches[id];
+                    const done = row?.is_final && row.score1 != null && row.score2 != null;
+                    if (done) { scoreStr = `${row.score1} – ${row.score2}`; w = row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0; }
+                  }
                   return (
                     <div key={id} className="px-4 py-2 flex items-center gap-3 text-sm">
                       <span className="font-mono text-[10px] text-neutral-600 w-14 shrink-0">
@@ -1207,8 +1254,8 @@ const KnockoutTable = ({ cat, matches, standings }) => {
                       <span className={`flex-1 truncate text-right ${w === 1 ? 'font-bold text-green-400' : resolved.p1 ? 'text-white' : 'text-neutral-500'}`}>
                         {p1}{resolved.p1Tied ? ' *' : ''}
                       </span>
-                      <span className="font-mono tabular-nums text-neutral-300 shrink-0">
-                        {done ? `${row.score1} – ${row.score2}` : 'vs'}
+                      <span className="font-mono tabular-nums text-neutral-300 shrink-0 whitespace-nowrap">
+                        {scoreStr}
                       </span>
                       <span className={`flex-1 truncate ${w === 2 ? 'font-bold text-green-400' : resolved.p2 ? 'text-white' : 'text-neutral-500'}`}>
                         {p2}{resolved.p2Tied ? ' *' : ''}

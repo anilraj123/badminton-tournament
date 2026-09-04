@@ -5,24 +5,24 @@
   "siteTitle": "Ecumenical Badminton — Live",
   "tvTitle": "Ecumenical Badminton — Dashboard",
 
-  "fullTitle": "Ecumenical Badminton Tournament 2026",
-  "organizer": "Ecumenical Badminton",
-  "presentedBy": "Ecumenical Badminton Presents",
+  "fullTitle": "Badminton Tournament 2026",
+  "organizer": "Kerala Ecumenical Churches of Bay Area",
+  "presentedBy": "Kerala Ecumenical Churches of Bay Area Presents",
   "tagline": "",
 
   "date": "Saturday, September 5, 2026",
-  "timeRange": "9:00 AM onwards",
-  "checkIn": "Check-in: 8:30 AM",
+  "timeRange": "9:00 AM – 5:00 PM",
+  "checkIn": "Check-in: 8:00 – 9:00 AM",
   "venue": {
-    "name": "Community Sports Hall",
-    "address": "123 Main St, Your City, ST 00000"
+    "name": "Elite Badminton Center",
+    "address": "Union City, CA"
   },
   "contact": {
     "name": "Tournament Desk",
     "phone": "555-0100",
     "tel": "+15550100"
   },
-  "categoriesBlurb": "Men's Singles & Doubles · Women's Doubles · Mixed Doubles",
+  "categoriesBlurb": "Men's Singles & Doubles · Women's Doubles · Mixed Doubles · Age 13+",
 
   "poster": null
 }
