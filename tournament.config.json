@@ -1,13 +1,13 @@
 {
   "_comment": "EDIT THIS FILE for your tournament. Every branded thing on the site reads from here. 'name' is the big header; 'siteTitle'/'tvTitle' are browser-tab titles; 'tagline' may be '' to hide; 'poster' is a path under public/ or null to hide the poster block.",
 
-  "name": "ECUM BADMINTON",
-  "siteTitle": "ECUM Badminton — Live",
-  "tvTitle": "ECUM Badminton — Dashboard",
+  "name": "ECUMENICAL BADMINTON",
+  "siteTitle": "Ecumenical Badminton — Live",
+  "tvTitle": "Ecumenical Badminton — Dashboard",
 
-  "fullTitle": "ECUM Badminton Tournament 2026",
-  "organizer": "ECUM",
-  "presentedBy": "ECUM Presents",
+  "fullTitle": "Ecumenical Badminton Tournament 2026",
+  "organizer": "Ecumenical Badminton",
+  "presentedBy": "Ecumenical Badminton Presents",
   "tagline": "",
 
   "date": "Saturday, September 5, 2026",
