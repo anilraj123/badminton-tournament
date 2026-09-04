@@ -156,6 +156,23 @@ const arePrelimsComplete = (cat, matches) => {
   return prelims.every(m => !!matches[m.id]?.is_final);
 };
 
+// Head-to-head result between two entrants in a category's prelims.
+// Returns 1 if A beat B, -1 if B beat A, 0 if not decided/found.
+const headToHead = (cat, nameA, nameB, matches) => {
+  for (const m of SCHEDULE) {
+    if (m.isPlayoff || m.cat !== cat) continue;
+    const aIsP1 = namesMatch(nameA, m.p1), aIsP2 = namesMatch(nameA, m.p2);
+    const bIsP1 = namesMatch(nameB, m.p1), bIsP2 = namesMatch(nameB, m.p2);
+    if (!((aIsP1 && bIsP2) || (aIsP2 && bIsP1))) continue;
+    const row = matches[m.id];
+    if (!row?.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return 0;
+    const aScore = aIsP1 ? row.score1 : row.score2;
+    const bScore = aIsP1 ? row.score2 : row.score1;
+    return aScore > bScore ? 1 : -1;
+  }
+  return 0;
+};
+
 const calculateStandings = (matches) => {
   const st = {};
   Object.entries(GROUPS).forEach(([cat, groups]) => {
@@ -183,9 +200,13 @@ const calculateStandings = (matches) => {
       }
     }
   });
-  Object.values(st).forEach(cat => Object.values(cat).forEach(g => g.sort((a,b) => {
+  // Rank: wins, then point differential, then head-to-head (per the rules:
+  // 2-way tie -> head-to-head winner; 3-way -> differential decides first).
+  Object.entries(st).forEach(([cat, groups]) => Object.values(groups).forEach(g => g.sort((a,b) => {
     if (b.won !== a.won) return b.won - a.won;
-    return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+    const dd = (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+    if (dd !== 0) return dd;
+    return -headToHead(cat, a.name, b.name, matches);
   })));
   return st;
 };
@@ -201,7 +222,7 @@ const resolveSemiSlot = (standings, slotInfo, cat) => {
 // Returns all names tied at a given slot's rank, based on (won, diff) equality
 // with the entry currently at slotInfo.rank. Returns null if the slot has no
 // played matches yet, or { names: [...], tied: bool } otherwise.
-const resolveSemiSlotAll = (standings, slotInfo, cat) => {
+const resolveSemiSlotAll = (standings, slotInfo, cat, matches) => {
   if (!slotInfo || !standings[cat]) return null;
   const groupStandings = standings[cat][slotInfo.group];
   if (!groupStandings || groupStandings.length < slotInfo.rank) return null;
@@ -214,6 +235,11 @@ const resolveSemiSlotAll = (standings, slotInfo, cat) => {
     if (e.played === 0) return false;
     return e.won === targetWon && (e.pointsFor - e.pointsAgainst) === targetDiff;
   });
+  // 2-way tie decided by head-to-head: the sort already ordered them, so the
+  // slot resolves cleanly to whoever sits at the rank.
+  if (tied.length === 2 && matches && headToHead(cat, tied[0].name, tied[1].name, matches) !== 0) {
+    return { names: [target.name], tied: false };
+  }
   return {
     names: tied.map(e => e.name),
     tied: tied.length > 1,
@@ -279,7 +305,7 @@ const resolveKnockoutSlot = (slot, cat, standings, matches) => {
   if (!slot) return null;
   if (slot.group) {
     if (!arePrelimsComplete(cat, matches)) return null;
-    return resolveSemiSlotAll(standings, slot, cat);
+    return resolveSemiSlotAll(standings, slot, cat, matches);
   }
   if (slot.winnerOf) {
     const w = getKnockoutWinner(matches, slot.winnerOf, standings);
@@ -649,10 +675,10 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
                 onPlus={() => bump(2, +1)} onMinus={() => bump(2, -1)} color={c} />
             </div>
 
-            {row?.match_type === 'prelim' && (s1 > 15 || s2 > 15) && !row?.is_final && (
+            {(s1 > (row?.scoring_format || 21) || s2 > (row?.scoring_format || 21)) && !row?.is_final && (
               <div className="mt-5 p-3 rounded bg-orange-950/50 border border-orange-800/50 text-orange-300 text-xs">
-                <div className="font-bold uppercase tracking-wider mb-1">⚠️ Score exceeds 15</div>
-                <div className="text-orange-400/80">Prelims are first to 15 points. Consider marking complete if this is the final score.</div>
+                <div className="font-bold uppercase tracking-wider mb-1">⚠️ Score exceeds {row?.scoring_format || 21}</div>
+                <div className="text-orange-400/80">This match is first to {row?.scoring_format || 21} points. Consider marking complete if this is the final score.</div>
               </div>
             )}
 
@@ -806,8 +832,8 @@ const resolvePlayoffNames = (match, standings, matches) => {
     if (!arePrelimsComplete(s.cat, matches)) {
       return { p1: null, p2: null, p1Tied: false, p2Tied: false };
     }
-    const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat);
-    const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat);
+    const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat, matches);
+    const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat, matches);
     return {
       p1: a1 ? a1.names.join(' / ') : null,
       p2: a2 ? a2.names.join(' / ') : null,
@@ -924,7 +950,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                     if (overrideP1) {
                       p1Name = overrideP1;
                     } else if (prelimsDone) {
-                      const a1 = resolveSemiSlotAll(standings, item.slot1, item.cat);
+                      const a1 = resolveSemiSlotAll(standings, item.slot1, item.cat, matches);
                       if (a1) {
                         p1Name = a1.names.join(' / ');
                         p1Tied = a1.tied;
@@ -937,7 +963,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                     if (overrideP2) {
                       p2Name = overrideP2;
                     } else if (prelimsDone) {
-                      const a2 = resolveSemiSlotAll(standings, item.slot2, item.cat);
+                      const a2 = resolveSemiSlotAll(standings, item.slot2, item.cat, matches);
                       if (a2) {
                         p2Name = a2.names.join(' / ');
                         p2Tied = a2.tied;

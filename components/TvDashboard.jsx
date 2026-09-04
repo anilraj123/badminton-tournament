@@ -57,6 +57,22 @@ const arePrelimsComplete = (cat, matches) => {
   return prelims.every(m => !!matches[m.id]?.is_final);
 };
 
+// Head-to-head result between two entrants in a category's prelims.
+const headToHead = (cat, nameA, nameB, matches) => {
+  for (const m of SCHEDULE) {
+    if (m.isPlayoff || m.cat !== cat) continue;
+    const aIsP1 = namesMatch(nameA, m.p1), aIsP2 = namesMatch(nameA, m.p2);
+    const bIsP1 = namesMatch(nameB, m.p1), bIsP2 = namesMatch(nameB, m.p2);
+    if (!((aIsP1 && bIsP2) || (aIsP2 && bIsP1))) continue;
+    const row = matches[m.id];
+    if (!row?.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return 0;
+    const aScore = aIsP1 ? row.score1 : row.score2;
+    const bScore = aIsP1 ? row.score2 : row.score1;
+    return aScore > bScore ? 1 : -1;
+  }
+  return 0;
+};
+
 const calculateStandings = (matches) => {
   const st = {};
   Object.entries(GROUPS).forEach(([cat, groups]) => {
@@ -84,9 +100,12 @@ const calculateStandings = (matches) => {
       }
     }
   });
-  Object.values(st).forEach(cat => Object.values(cat).forEach(g => g.sort((a,b) => {
+  // Rank: wins, then point differential, then head-to-head.
+  Object.entries(st).forEach(([cat, groups]) => Object.values(groups).forEach(g => g.sort((a,b) => {
     if (b.won !== a.won) return b.won - a.won;
-    return (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+    const dd = (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
+    if (dd !== 0) return dd;
+    return -headToHead(cat, a.name, b.name, matches);
   })));
   return st;
 };
@@ -98,7 +117,7 @@ const resolveSemiSlot = (standings, slotInfo, cat) => {
   const entry = g[slotInfo.rank - 1];
   return entry && entry.played > 0 ? entry.name : null;
 };
-const resolveSemiSlotAll = (standings, slotInfo, cat) => {
+const resolveSemiSlotAll = (standings, slotInfo, cat, matches) => {
   if (!slotInfo || !standings[cat]) return null;
   const groupStandings = standings[cat][slotInfo.group];
   if (!groupStandings || groupStandings.length < slotInfo.rank) return null;
@@ -110,6 +129,10 @@ const resolveSemiSlotAll = (standings, slotInfo, cat) => {
     if (e.played === 0) return false;
     return e.won === targetWon && (e.pointsFor - e.pointsAgainst) === targetDiff;
   });
+  // 2-way tie decided by head-to-head (the sort already ordered them)
+  if (tied.length === 2 && matches && headToHead(cat, tied[0].name, tied[1].name, matches) !== 0) {
+    return { names: [target.name], tied: false };
+  }
   return { names: tied.map(e => e.name), tied: tied.length > 1 };
 };
 
@@ -118,7 +141,7 @@ const resolveKnockoutSlot = (slot, cat, standings, matches) => {
   if (!slot) return null;
   if (slot.group) {
     if (!arePrelimsComplete(cat, matches)) return null;
-    return resolveSemiSlotAll(standings, slot, cat);
+    return resolveSemiSlotAll(standings, slot, cat, matches);
   }
   if (slot.winnerOf) {
     const w = getKnockoutWinner(matches, slot.winnerOf, standings);
@@ -182,8 +205,8 @@ const resolvePlayoffNames = (match, standings, matches) => {
     if (!arePrelimsComplete(s.cat, matches)) {
       return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
     }
-    const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat);
-    const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat);
+    const a1 = resolveSemiSlotAll(standings, s.slot1, s.cat, matches);
+    const a2 = resolveSemiSlotAll(standings, s.slot2, s.cat, matches);
     return {
       p1: a1 ? a1.names.join(' / ') : match.p1,
       p2: a2 ? a2.names.join(' / ') : match.p2,
@@ -465,14 +488,14 @@ const CategoryColumn = ({ cat, standings, matches }) => {
             if (override?.p1) {
               p1 = override.p1;
             } else if (prelimsDone) {
-              const a1 = resolveSemiSlotAll(standings, semiInfo.slot1, cat);
+              const a1 = resolveSemiSlotAll(standings, semiInfo.slot1, cat, matches);
               p1 = a1 ? a1.names.join(' / ') : null;
               p1IsTied = !!(a1 && a1.tied);
             }
             if (override?.p2) {
               p2 = override.p2;
             } else if (prelimsDone) {
-              const a2 = resolveSemiSlotAll(standings, semiInfo.slot2, cat);
+              const a2 = resolveSemiSlotAll(standings, semiInfo.slot2, cat, matches);
               p2 = a2 ? a2.names.join(' / ') : null;
               p2IsTied = !!(a2 && a2.tied);
             }
