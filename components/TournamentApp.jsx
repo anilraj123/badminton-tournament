@@ -1043,7 +1043,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
 };
 
 const StandingsTab = ({ matches, standings }) => {
-  const [activeCat, setActiveCat] = useState('MS');
+  const [activeCat, setActiveCat] = useState(Object.keys(GROUPS)[0]);
   return (
     <div>
       <div className="flex gap-1.5 mb-6 flex-wrap">
