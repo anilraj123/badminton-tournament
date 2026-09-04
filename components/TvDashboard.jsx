@@ -6,7 +6,7 @@ import {
   SCHEDULE, GROUPS, CAT_LABELS, NAME_ALIASES,
   PLAYOFF_STRUCTURE, FINALS_STRUCTURE,
 } from '../lib/tournament-data';
-import { ADVANCE_PER_GROUP } from '../lib/tournament-data';
+import { ADVANCE_PER_GROUP, KNOCKOUT } from '../lib/tournament-data';
 import { TOURNAMENT } from '../lib/tournament-config.mjs';
 
 const COURTS = [...new Set(SCHEDULE.map(m => m.court))].sort((a, b) => a - b);
@@ -113,6 +113,31 @@ const resolveSemiSlotAll = (standings, slotInfo, cat) => {
   return { names: tied.map(e => e.name), tied: tied.length > 1 };
 };
 
+// ---- knockout bracket (single-game matches, winner-of feeds) ----
+const resolveKnockoutSlot = (slot, cat, standings, matches) => {
+  if (!slot) return null;
+  if (slot.group) {
+    if (!arePrelimsComplete(cat, matches)) return null;
+    return resolveSemiSlotAll(standings, slot, cat);
+  }
+  if (slot.winnerOf) {
+    const w = getKnockoutWinner(matches, slot.winnerOf, standings);
+    return w ? { names: [w], tied: false } : null;
+  }
+  return null;
+};
+
+const getKnockoutWinner = (matches, id, standings) => {
+  const k = KNOCKOUT[id];
+  if (!k) return null;
+  const row = matches[id];
+  if (!row || !row.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return null;
+  const s1 = resolveKnockoutSlot(k.slot1, k.cat, standings, matches);
+  const s2 = resolveKnockoutSlot(k.slot2, k.cat, standings, matches);
+  if (!s1 || s1.tied || !s2 || s2.tied) return null;
+  return row.score1 > row.score2 ? s1.names[0] : s2.names[0];
+};
+
 const getSemiWinner = (matches, semiId, standings) => {
   const structure = PLAYOFF_STRUCTURE[semiId];
   if (!structure) return null;
@@ -141,6 +166,17 @@ const resolvePlayoffNames = (match, standings, matches) => {
   const parentId = match.parentMatchId || match.id;
   const override = getPlayoffOverride(matches, parentId);
   if (override) return { p1: override.p1 || match.p1, p2: override.p2 || match.p2, p1Tied: false, p2Tied: false };
+  if (KNOCKOUT[parentId]) {
+    const k = KNOCKOUT[parentId];
+    const a1 = resolveKnockoutSlot(k.slot1, k.cat, standings, matches);
+    const a2 = resolveKnockoutSlot(k.slot2, k.cat, standings, matches);
+    return {
+      p1: a1 ? a1.names.join(' / ') : match.p1,
+      p2: a2 ? a2.names.join(' / ') : match.p2,
+      p1Tied: !!(a1 && a1.tied),
+      p2Tied: !!(a2 && a2.tied),
+    };
+  }
   if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
     const s = PLAYOFF_STRUCTURE[parentId];
     if (!arePrelimsComplete(s.cat, matches)) {
@@ -308,6 +344,7 @@ const CategoryColumn = ({ cat, standings, matches }) => {
   const c = CAT_COLORS[cat];
   const groups = standings[cat] || {};
   const semiEntries = Object.entries(PLAYOFF_STRUCTURE).filter(([_, v]) => v.cat === cat);
+  const knockoutEntries = Object.entries(KNOCKOUT).filter(([_, v]) => v.cat === cat);
   const finalEntry = Object.entries(FINALS_STRUCTURE).find(([_, v]) => v.cat === cat);
   const prelimsDone = arePrelimsComplete(cat, matches);
 
@@ -331,6 +368,10 @@ const CategoryColumn = ({ cat, standings, matches }) => {
     if (t1 >= 2) champion = p1;
     else if (t2 >= 2) champion = p2;
     if (sets.length > 0) finalScoresStr = sets.join(' ');
+  }
+  if (!champion) {
+    const kFinal = knockoutEntries.find(([_, k]) => k.round === 'final');
+    if (kFinal) champion = getKnockoutWinner(matches, kFinal[0], standings);
   }
 
   return (
@@ -380,6 +421,39 @@ const CategoryColumn = ({ cat, standings, matches }) => {
           </div>
         ))}
       </div>
+
+      {knockoutEntries.length > 0 && (
+        <div className="px-2.5 py-1.5 border-t border-gray-200 bg-gray-50">
+          <div className="text-[10px] font-bold tracking-widest text-gray-400 mb-0.5">KNOCKOUT · GAME TO 21</div>
+          <div className="grid gap-x-4" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+            {[['r16', 'ROUND OF 16'], ['quarter', 'QUARTERFINALS'], ['semi', 'SEMIFINALS'], ['final', 'FINAL']].map(([rk, rTitle]) => {
+              const rEntries = knockoutEntries.filter(([_, k]) => k.round === rk);
+              if (rEntries.length === 0) return null;
+              return (
+                <div key={rk}>
+                  <div className="text-[9px] font-bold tracking-widest text-gray-400">{rTitle}</div>
+                  {rEntries.map(([id, k]) => {
+                    const sched = SCHEDULE.find(m => m.id === id);
+                    const res = sched ? resolvePlayoffNames(sched, standings, matches) : { p1: '—', p2: '—' };
+                    const row = matches[id];
+                    const done = row?.is_final && row.score1 != null && row.score2 != null;
+                    const w = done ? (row.score1 > row.score2 ? 1 : 2) : 0;
+                    return (
+                      <div key={id} className="text-[11px] leading-tight py-0 truncate">
+                        <span className={w === 1 ? 'font-bold text-gray-900' : 'text-gray-700'}>{res.p1}</span>
+                        {res.p1Tied && <span className="ml-0.5 text-[8px] font-bold px-0.5 rounded bg-orange-100 text-orange-800">TIE</span>}
+                        <span className="text-gray-300 mx-1">{done ? `${row.score1}-${row.score2}` : 'v'}</span>
+                        <span className={w === 2 ? 'font-bold text-gray-900' : 'text-gray-700'}>{res.p2}</span>
+                        {res.p2Tied && <span className="ml-0.5 text-[8px] font-bold px-0.5 rounded bg-orange-100 text-orange-800">TIE</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {semiEntries.length > 0 && (
         <div className="px-2.5 py-1.5 border-t border-gray-200 bg-gray-50">

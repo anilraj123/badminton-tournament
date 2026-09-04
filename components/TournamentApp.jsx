@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Calendar, BarChart3, User, X, Check, Edit3, MapPin, Lock, Wifi, WifiOff, Plus, Minus, RotateCcw, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES, PLAYOFF_STRUCTURE, FINALS_STRUCTURE, ADVANCE_PER_GROUP } from '../lib/tournament-data';
+import { SCHEDULE, GROUPS, TEAM_ROSTERS, CAT_LABELS, NAME_ALIASES, PLAYOFF_STRUCTURE, FINALS_STRUCTURE, ADVANCE_PER_GROUP, KNOCKOUT } from '../lib/tournament-data';
 import { TOURNAMENT } from '../lib/tournament-config.mjs';
 
 const COURT_COUNT = new Set(SCHEDULE.filter(m => m.cat !== 'BREAK').map(m => m.court)).size;
@@ -271,6 +271,34 @@ const getSemiWinner = (matches, semiId, standings) => {
   return null;
 };
 
+// ---------- knockout bracket (single-game matches, winner-of feeds) ----------
+// A slot is { group, rank } (resolved from standings once prelims finish)
+// or { winnerOf: matchId } (resolved from that knockout match's final score).
+// Returns { names: [...], tied } or null while unresolved.
+const resolveKnockoutSlot = (slot, cat, standings, matches) => {
+  if (!slot) return null;
+  if (slot.group) {
+    if (!arePrelimsComplete(cat, matches)) return null;
+    return resolveSemiSlotAll(standings, slot, cat);
+  }
+  if (slot.winnerOf) {
+    const w = getKnockoutWinner(matches, slot.winnerOf, standings);
+    return w ? { names: [w], tied: false } : null;
+  }
+  return null;
+};
+
+const getKnockoutWinner = (matches, id, standings) => {
+  const k = KNOCKOUT[id];
+  if (!k) return null;
+  const row = matches[id];
+  if (!row || !row.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return null;
+  const s1 = resolveKnockoutSlot(k.slot1, k.cat, standings, matches);
+  const s2 = resolveKnockoutSlot(k.slot2, k.cat, standings, matches);
+  if (!s1 || s1.tied || !s2 || s2.tied) return null;
+  return row.score1 > row.score2 ? s1.names[0] : s2.names[0];
+};
+
 // ---------- small UI ----------
 const CategoryBadge = ({ cat, small = false }) => {
   const c = CAT_COLORS[cat] || CAT_COLORS.MS;
@@ -339,6 +367,18 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <CategoryBadge cat={match.cat} small />
+            {match.matchType === 'r16' && (
+              <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: '#1e40af', color: '#fff' }}>
+                RD OF 16
+              </span>
+            )}
+            {match.matchType === 'quarter' && (
+              <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: '#6d28d9', color: '#fff' }}>
+                QUARTER
+              </span>
+            )}
             {match.matchType === 'semi' && (
               <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
                     style={{ backgroundColor: '#854d0e', color: '#fff' }}>
@@ -745,7 +785,20 @@ const resolvePlayoffNames = (match, standings, matches) => {
     return { p1: override.p1, p2: override.p2, p1Tied: false, p2Tied: false };
   }
 
-  // STEP 2: Auto-resolve from PLAYOFF_STRUCTURE (for semis) — surface ties.
+  // STEP 2: Knockout bracket (single-game matches with winner-of feeds)
+  if (KNOCKOUT[parentId]) {
+    const k = KNOCKOUT[parentId];
+    const a1 = resolveKnockoutSlot(k.slot1, k.cat, standings, matches);
+    const a2 = resolveKnockoutSlot(k.slot2, k.cat, standings, matches);
+    return {
+      p1: a1 ? a1.names.join(' / ') : null,
+      p2: a2 ? a2.names.join(' / ') : null,
+      p1Tied: !!(a1 && a1.tied),
+      p2Tied: !!(a2 && a2.tied),
+    };
+  }
+
+  // STEP 3: Auto-resolve from PLAYOFF_STRUCTURE (for 3-set semis) — surface ties.
   // Wait until ALL prelims in this category are complete; otherwise leave the
   // schedule placeholder in place (caller falls back to match.p1 / match.p2).
   if (match.matchType === 'semi' && PLAYOFF_STRUCTURE[parentId]) {
@@ -1052,23 +1105,99 @@ const StandingsTab = ({ matches, standings }) => {
         ))}
       </div>
 
-      {/* Semi-Finals for active category */}
-      <PlayoffsTable 
-        structures={Object.fromEntries(Object.entries(PLAYOFF_STRUCTURE).filter(([_, v]) => v.cat === activeCat))}
-        matches={matches}
-        standings={standings}
-        isSemi={true}
-        title="Semi-Finals (Best of 3 Sets)"
-      />
-      
-      {/* Finals for active category */}
-      <PlayoffsTable 
-        structures={Object.fromEntries(Object.entries(FINALS_STRUCTURE).filter(([_, v]) => v.cat === activeCat))}
-        matches={matches}
-        standings={standings}
-        isSemi={false}
-        title="Finals (Best of 3 Sets)"
-      />
+      {/* Knockout bracket for active category */}
+      <KnockoutTable cat={activeCat} matches={matches} standings={standings} />
+
+      {/* Legacy 3-set semis/finals (unused when KNOCKOUT is defined) */}
+      {Object.keys(PLAYOFF_STRUCTURE).length > 0 && (
+        <PlayoffsTable
+          structures={Object.fromEntries(Object.entries(PLAYOFF_STRUCTURE).filter(([_, v]) => v.cat === activeCat))}
+          matches={matches}
+          standings={standings}
+          isSemi={true}
+          title="Semi-Finals (Best of 3 Sets)"
+        />
+      )}
+      {Object.keys(FINALS_STRUCTURE).length > 0 && (
+        <PlayoffsTable
+          structures={Object.fromEntries(Object.entries(FINALS_STRUCTURE).filter(([_, v]) => v.cat === activeCat))}
+          matches={matches}
+          standings={standings}
+          isSemi={false}
+          title="Finals (Best of 3 Sets)"
+        />
+      )}
+    </div>
+  );
+};
+
+// Knockout bracket table for the Standings tab — one section per round.
+const KNOCKOUT_ROUNDS = [
+  { key: 'r16', title: 'Round of 16' },
+  { key: 'quarter', title: 'Quarterfinals' },
+  { key: 'semi', title: 'Semifinals' },
+  { key: 'final', title: 'Final' },
+];
+
+const KnockoutTable = ({ cat, matches, standings }) => {
+  const entries = Object.entries(KNOCKOUT).filter(([_, k]) => k.cat === cat);
+  if (entries.length === 0) return null;
+  const champion = (() => {
+    const fin = entries.find(([_, k]) => k.round === 'final');
+    return fin ? getKnockoutWinner(matches, fin[0], standings) : null;
+  })();
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center gap-3 mb-4">
+        <h2 className="text-lg font-bold text-white uppercase tracking-wider">Knockout — Single Game to 21</h2>
+        {champion && (
+          <span className="px-2 py-1 text-xs font-bold rounded bg-yellow-300 text-yellow-900">🏆 CHAMPION · {champion}</span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {KNOCKOUT_ROUNDS.map(round => {
+          const roundEntries = entries.filter(([_, k]) => k.round === round.key);
+          if (roundEntries.length === 0) return null;
+          return (
+            <div key={round.key} className="border border-neutral-800" style={{ backgroundColor: '#0a0a0a' }}>
+              <div className="px-4 py-2 border-b border-neutral-800 text-xs font-bold uppercase tracking-widest text-neutral-400">
+                {round.title}
+              </div>
+              <div className="divide-y divide-neutral-900">
+                {roundEntries.map(([id, k]) => {
+                  const sched = SCHEDULE.find(m => m.id === id);
+                  const row = matches[id];
+                  const resolved = sched ? resolvePlayoffNames(sched, standings, matches) : { p1: null, p2: null };
+                  const p1 = resolved.p1 || sched?.p1 || '—';
+                  const p2 = resolved.p2 || sched?.p2 || '—';
+                  const done = row?.is_final && row.score1 != null && row.score2 != null;
+                  const w = done ? (row.score1 > row.score2 ? 1 : row.score2 > row.score1 ? 2 : 0) : 0;
+                  return (
+                    <div key={id} className="px-4 py-2 flex items-center gap-3 text-sm">
+                      <span className="font-mono text-[10px] text-neutral-600 w-14 shrink-0">
+                        {sched ? `${formatTime12h(sched.time)} · C${sched.court}` : ''}
+                      </span>
+                      <span className={`flex-1 truncate text-right ${w === 1 ? 'font-bold text-green-400' : resolved.p1 ? 'text-white' : 'text-neutral-500'}`}>
+                        {p1}{resolved.p1Tied ? ' *' : ''}
+                      </span>
+                      <span className="font-mono tabular-nums text-neutral-300 shrink-0">
+                        {done ? `${row.score1} – ${row.score2}` : 'vs'}
+                      </span>
+                      <span className={`flex-1 truncate ${w === 2 ? 'font-bold text-green-400' : resolved.p2 ? 'text-white' : 'text-neutral-500'}`}>
+                        {p2}{resolved.p2Tied ? ' *' : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 text-[10px] text-neutral-600 tracking-wider">
+        Names fill in automatically as the group stage and earlier rounds finish. * = tie in group standings, decided by head-to-head/committee.
+      </div>
     </div>
   );
 };
