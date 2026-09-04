@@ -150,7 +150,7 @@ const Rules = () => {
           </p>
         )}
         <p className="text-blue-300 text-xs">
-          Contact: {TOURNAMENT.contact.name} · {TOURNAMENT.contact.phone}
+          Contact: {TOURNAMENT.contact.name}{TOURNAMENT.contact.phone ? ` · ${TOURNAMENT.contact.phone}` : ''}
         </p>
       </div>
     </div>

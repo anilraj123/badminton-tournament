@@ -1487,7 +1487,7 @@ export default function TournamentApp() {
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Contact</div>
-                  <div>{TOURNAMENT.contact.name} · <a href={`tel:${TOURNAMENT.contact.tel}`} className="text-white hover:text-amber-300 transition-colors">{TOURNAMENT.contact.phone}</a></div>
+                  <div>{TOURNAMENT.contact.name}{TOURNAMENT.contact.phone ? <> · <a href={`tel:${TOURNAMENT.contact.tel}`} className="text-white hover:text-amber-300 transition-colors">{TOURNAMENT.contact.phone}</a></> : null}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Categories</div>
