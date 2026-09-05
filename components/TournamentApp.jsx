@@ -315,7 +315,7 @@ const getSemiWinner = (matches, semiId, standings) => {
 
 // ---------- knockout bracket (single-game matches, winner-of feeds) ----------
 // A slot is { group, rank } (resolved from standings once prelims finish)
-// or { winnerOf: matchId } (resolved from that knockout match's final score).
+// or { winnerOf: matchId } / { loserOf: matchId } (from that match's final score).
 // Returns { names: [...], tied } or null while unresolved.
 const resolveKnockoutSlot = (slot, cat, standings, matches) => {
   if (!slot) return null;
@@ -326,6 +326,10 @@ const resolveKnockoutSlot = (slot, cat, standings, matches) => {
   if (slot.winnerOf) {
     const w = getKnockoutWinner(matches, slot.winnerOf, standings);
     return w ? { names: [w], tied: false } : null;
+  }
+  if (slot.loserOf) {
+    const l = getKnockoutLoser(matches, slot.loserOf, standings);
+    return l ? { names: [l], tied: false } : null;
   }
   return null;
 };
@@ -358,6 +362,18 @@ const getKnockoutWinner = (matches, id, standings) => {
   const row = matches[id];
   if (!row || !row.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return null;
   return row.score1 > row.score2 ? s1.names[0] : s2.names[0];
+};
+
+// The beaten side of a decided knockout match — feeds the 3rd place playoffs.
+const getKnockoutLoser = (matches, id, standings) => {
+  const k = KNOCKOUT[id];
+  if (!k) return null;
+  const winner = getKnockoutWinner(matches, id, standings);
+  if (!winner) return null;
+  const s1 = resolveKnockoutSlot(k.slot1, k.cat, standings, matches);
+  const s2 = resolveKnockoutSlot(k.slot2, k.cat, standings, matches);
+  if (!s1 || !s2) return null;
+  return s1.names[0] === winner ? s2.names[0] : s1.names[0];
 };
 
 // ---------- small UI ----------
@@ -450,6 +466,12 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
               <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
                     style={{ backgroundColor: '#7c2d12', color: '#fff' }}>
                 FINAL{match.setNumber ? ` SET ${match.setNumber}` : ''}
+              </span>
+            )}
+            {match.matchType === 'third' && (
+              <span className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: '#3f6212', color: '#fff' }}>
+                3RD PLACE{match.setNumber ? ` SET ${match.setNumber}` : ''}
               </span>
             )}
           </div>
@@ -1198,13 +1220,14 @@ const KNOCKOUT_ROUNDS = [
   { key: 'quarter', title: 'Quarterfinals' },
   { key: 'semi', title: 'Semifinals' },
   { key: 'final', title: 'Final' },
+  { key: 'third', title: '3rd Place' },
 ];
 
 const KnockoutTable = ({ cat, matches, standings }) => {
   const entries = Object.entries(KNOCKOUT).filter(([_, k]) => k.cat === cat);
   if (entries.length === 0) return null;
   const champion = (() => {
-    const fin = entries.find(([_, k]) => k.round === 'final');
+    const fin = entries.find(([_, k]) => k.round === 'final' && k.label === 'Final');
     return fin ? getKnockoutWinner(matches, fin[0], standings) : null;
   })();
 
@@ -1497,7 +1520,7 @@ export default function TournamentApp() {
             </div>
           </div>
           <div className="mt-8 pt-4 border-t border-neutral-900 flex items-center justify-between text-[10px] text-neutral-600 uppercase tracking-widest">
-            <span>Per-match umpire PINs · Admin override available</span>
+            <span>Shared score-entry PIN · Any match, any device</span>
             <span>Realtime · Supabase</span>
           </div>
         </div>

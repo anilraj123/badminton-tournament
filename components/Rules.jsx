@@ -52,7 +52,7 @@ const Rules = () => {
           </div>
           <div className="p-3 rounded bg-neutral-900/50 border border-neutral-800">
             <div className="font-bold text-orange-300 mb-1">Sets</div>
-            <div className="text-neutral-300">Prelims & Quarterfinals: <span className="font-bold text-white">ONE set</span> · Semis & Finals: <span className="font-bold text-white">THREE sets</span></div>
+            <div className="text-neutral-300">Prelims & Quarterfinals: <span className="font-bold text-white">ONE set</span> · Semis, Finals & 3rd Place: <span className="font-bold text-white">THREE sets</span></div>
           </div>
         </div>
       </div>
