@@ -1424,7 +1424,7 @@ export default function TournamentApp() {
             </div>
             <div className="flex gap-6 font-mono">
               <div>
-                <div className="text-[10px] text-neutral-500 uppercase tracking-widest">Matches</div>
+                <div className="text-[10px] text-neutral-500 uppercase tracking-widest">Group</div>
                 <div className="text-2xl font-bold tabular-nums text-white">{completed}<span className="text-neutral-600">/{totalNonPlayoff}</span></div>
               </div>
               <div>

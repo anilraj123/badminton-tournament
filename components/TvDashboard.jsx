@@ -688,7 +688,7 @@ export default function TvDashboard() {
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-[9px] font-bold tracking-widest text-gray-400">MATCHES</div>
+            <div className="text-[9px] font-bold tracking-widest text-gray-400">GROUP</div>
             <div className="text-lg font-bold font-mono tabular-nums leading-none">
               {completedCount}<span className="text-gray-300">/{totalCount}</span>
             </div>
