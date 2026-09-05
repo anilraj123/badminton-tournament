@@ -1047,8 +1047,8 @@ const KnockoutTable = ({ cat, matches, standings }) => {
                   }
                   return (
                     <div key={id} className="px-4 py-2 flex items-center gap-3 text-sm">
-                      <span className="font-mono text-[10px] text-neutral-500 w-14 shrink-0">
-                        {sched ? `${formatTime12h(sched.time)} · C${sched.court}` : ''}
+                      <span className="font-mono text-xs text-neutral-600 w-20 shrink-0 leading-snug">
+                        {sched ? <>{formatTime12h(sched.time)}<br />C{sched.court}</> : ''}
                       </span>
                       <span className={`flex-1 truncate text-right ${w === 1 ? 'font-bold text-green-700' : resolved.p1 ? 'text-neutral-900' : 'text-neutral-500'}`}>
                         {p1}{resolved.p1Tied ? ' *' : ''}
@@ -1109,7 +1109,7 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
                   const { p1, p2, p1Tied, p2Tied } = resolvePlayoffNames(m, standings, matches);
                   return (
                     <div key={m.id}>
-                      <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
+                      <div className="text-sm font-mono font-bold text-neutral-700 mb-1.5">{formatTime12h(m.time)}</div>
                       <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} p1Tied={p1Tied} p2Tied={p2Tied} />
                     </div>
                   );
@@ -1128,7 +1128,7 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
                   const { p1, p2, p1Tied, p2Tied } = resolvePlayoffNames(m, standings, matches);
                   return (
                     <div key={m.id}>
-                      <div className="text-[10px] font-mono text-neutral-500 mb-1">{formatTime12h(m.time)}</div>
+                      <div className="text-sm font-mono font-bold text-neutral-700 mb-1.5">{formatTime12h(m.time)}</div>
                       <MatchCard match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} p1Tied={p1Tied} p2Tied={p2Tied} />
                     </div>
                   );
