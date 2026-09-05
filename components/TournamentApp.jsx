@@ -165,9 +165,11 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
   return (
     <div className="relative group transition-all duration-200"
       style={{
-        backgroundColor: isLive ? '#1a1a1a' : '#131313',
+        // Completed matches get a green-tinted body, not just a green outline, so a
+        // fast scroll reads as bands of colour rather than rows of near-identical cards.
+        backgroundColor: isFinal ? '#0d1912' : isLive ? '#1a1a1a' : '#131313',
         border: `1px solid ${isFinal ? '#15803d' : isLive ? c.accent : involvesMe ? '#fbbf24' : '#2a2a2a'}`,
-        boxShadow: isLive ? `0 0 24px ${c.accent}30, inset 0 1px 0 ${c.accent}20` : isFinal ? '0 0 0 1px #15803d40' : involvesMe ? '0 0 0 1px #fbbf2440' : 'none',
+        boxShadow: isLive ? `0 0 24px ${c.accent}30, inset 0 1px 0 ${c.accent}20` : isFinal ? 'inset 3px 0 0 #15803d' : involvesMe ? '0 0 0 1px #fbbf2440' : 'none',
       }}>
       {isLive && !isFinal && (
         <div className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold tracking-widest flex items-center gap-1"
@@ -661,6 +663,42 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
   const timeSlots = useMemo(() => [...new Set(SCHEDULE.map(m => m.time))].sort(), []);
   const filtered = catFilter === 'ALL' ? SCHEDULE : SCHEDULE.filter(m => m.cat === catFilter);
 
+  // Finished matches drop out of the running order into a section of their own at
+  // the bottom, so the top of the page is always what still has to be played.
+  const isDone = (m) => !!matches[m.id]?.is_final;
+  const pending = filtered.filter(m => !isDone(m));
+  const done = filtered.filter(isDone);
+
+  const renderSlots = (list, { dim = false } = {}) => timeSlots.map(slot => {
+    const slotMatches = list.filter(m => m.time === slot);
+    if (slotMatches.length === 0) return null;
+    const hasLiveMatch = !dim && slotMatches.some(m => isMatchLive(matches[m.id], now));
+    return (
+      <div key={slot} className="mb-8">
+        <div className={`flex items-baseline gap-3 mb-3 py-2 ${dim ? '' : 'sticky top-14 z-10'}`} style={{ backgroundColor: '#050505' }}>
+          <div className={`text-2xl font-bold font-mono tabular-nums ${dim ? 'text-neutral-500' : 'text-white'}`}>{formatTime12h(slot)}</div>
+          {hasLiveMatch && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold tracking-widest" style={{ backgroundColor: '#ef4444', color: '#fff' }}>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+              </span>
+              NOW PLAYING
+            </div>
+          )}
+          <div className="flex-1 h-px bg-neutral-800"></div>
+          {slot === '16:00' && <div className="text-[10px] uppercase tracking-widest text-amber-400">Tea Break</div>}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {slotMatches.map(m => {
+            const { p1, p2, p1Tied, p2Tied } = resolvePlayoffNames(m, standings, matches);
+            return <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} p1Tied={p1Tied} p2Tied={p2Tied} />;
+          })}
+        </div>
+      </div>
+    );
+  });
+
   return (
     <div>
       <div className="flex gap-1.5 mb-6 flex-wrap">
@@ -677,35 +715,26 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
         ))}
       </div>
 
-      {timeSlots.map(slot => {
-        const slotMatches = filtered.filter(m => m.time === slot);
-        if (slotMatches.length === 0) return null;
-        const hasLiveMatch = slotMatches.some(m => isMatchLive(matches[m.id], now));
-        return (
-          <div key={slot} className="mb-8">
-            <div className="flex items-baseline gap-3 mb-3 sticky top-14 py-2 z-10" style={{ backgroundColor: '#050505' }}>
-              <div className="text-2xl font-bold text-white font-mono tabular-nums">{formatTime12h(slot)}</div>
-              {hasLiveMatch && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold tracking-widest" style={{ backgroundColor: '#ef4444', color: '#fff' }}>
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full rounded-full animate-ping bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-                  </span>
-                  NOW PLAYING
-                </div>
-              )}
-              <div className="flex-1 h-px bg-neutral-800"></div>
-              {slot === '16:00' && <div className="text-[10px] uppercase tracking-widest text-amber-400">Tea Break</div>}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {slotMatches.map(m => {
-                const { p1, p2, p1Tied, p2Tied } = resolvePlayoffNames(m, standings, matches);
-                return <MatchCard key={m.id} match={m} row={matches[m.id]} isLive={isMatchLive(matches[m.id], now)} onEdit={onEdit} myPlayer={myPlayer} resolvedP1={p1} resolvedP2={p2} p1Tied={p1Tied} p2Tied={p2Tied} />;
-              })}
-            </div>
+      {pending.length === 0 && done.length > 0 && (
+        <div className="mb-8 p-4 text-center text-sm text-neutral-400 border border-neutral-800">
+          Every match here has been played.
+        </div>
+      )}
+
+      {renderSlots(pending)}
+
+      {done.length > 0 && (
+        <div className="mt-4 mb-6 flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold tracking-widest"
+               style={{ backgroundColor: '#15803d', color: '#fff' }}>
+            <Check className="w-3 h-3" strokeWidth={3} />
+            COMPLETED · {done.length}
           </div>
-        );
-      })}
+          <div className="flex-1 h-px" style={{ backgroundColor: '#15803d40' }}></div>
+        </div>
+      )}
+
+      {renderSlots(done, { dim: true })}
     </div>
   );
 };
