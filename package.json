@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "reset-scores": "node --env-file=.env.local scripts/reset-scores.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

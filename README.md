@@ -87,8 +87,22 @@ Push the repo to GitHub, then on [vercel.com](https://vercel.com):
 
 You'll get a URL like `your-tournament.vercel.app`. That's your live site. (Note: Supabase free-tier projects pause after ~1 week of inactivity — create/resume the project close to tournament day.)
 
+## Clearing test scores
+
+Anyone trying the site out will leave scores on the board. Wipe them all:
+
+```bash
+npm run reset-scores -- --dry-run   # list what would be cleared
+npm run reset-scores                # actually clear them
+```
+
+Clears scores only — schedule, PINs and admin config are untouched, so there
+is no need to re-seed afterwards. **Run this after any test session and once
+more before the first serve.**
+
 ## Tournament day
 
+0. **Clear any test scores** — `npm run reset-scores` (see above)
 1. **Share the URL** with everyone (players, spectators, umpires); put `/tv` on the gym screen
 2. **Tell umpires the PIN — it's `1111` for every match**
 3. When an umpire taps "Score" on their match, they enter the scores and the PIN. Changes appear live on every other device.
@@ -123,6 +137,7 @@ lib/
   supabase.js            Client (falls back to in-browser data when unconfigured)
 scripts/
   seed.mjs             Insert matches, all sharing one PIN
+  reset-scores.mjs     Wipe all scores back to "not started"
 supabase/
   schema.sql           Tables, RLS, update_score RPC
 ```
