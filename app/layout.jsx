@@ -16,7 +16,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#050505" />
+        <meta name="theme-color" content="#f4f5f7" />
       </head>
       <body style={{ margin: 0 }}>{children}</body>
     </html>

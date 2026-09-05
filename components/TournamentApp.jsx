@@ -16,12 +16,14 @@ const COURT_COUNT = new Set(SCHEDULE.filter(m => m.cat !== 'BREAK').map(m => m.c
 const EVENT_COUNT = Object.keys(CAT_LABELS).length;
 import Rules from './Rules';
 
+// Light palette, matching the TV dashboard so the phone and the gym screen
+// read as the same tournament. `bg` is the soft tint behind a category badge.
 const CAT_COLORS = {
-  MS:  { bg: '#1e3a5f', text: '#a8d0ff', accent: '#4a9eff' },
-  MD:  { bg: '#3d2d52', text: '#d4b3ff', accent: '#9d5cff' },
-  MXD: { bg: '#4a2e1f', text: '#ffc5a8', accent: '#ff8a4a' },
-  WS:  { bg: '#3d1f3d', text: '#ffb3e6', accent: '#ff4ab8' },
-  WD:  { bg: '#1f3d2e', text: '#a8ffc5', accent: '#4aff8a' },
+  MS:  { bg: '#dbeafe', text: '#1e3a8a', accent: '#1e40af' },
+  MD:  { bg: '#ede9fe', text: '#5b21b6', accent: '#6d28d9' },
+  MXD: { bg: '#ffedd5', text: '#9a3412', accent: '#c2410c' },
+  WS:  { bg: '#fce7f3', text: '#9d174d', accent: '#be185d' },
+  WD:  { bg: '#d1fae5', text: '#065f46', accent: '#047857' },
 };
 
 // ---------- helpers ----------
@@ -134,7 +136,7 @@ const CategoryBadge = ({ cat, small = false }) => {
 
 const PlayerRow = ({ name, score, isWinner, hasScore, tied }) => (
   <div className="flex items-center justify-between gap-3">
-    <div className={`text-sm ${isWinner ? 'font-bold text-white' : hasScore ? 'text-neutral-500' : 'text-neutral-300'} truncate flex items-center gap-1.5`}>
+    <div className={`text-sm ${isWinner ? 'font-bold text-neutral-900' : hasScore ? 'text-neutral-500' : 'text-neutral-700'} truncate flex items-center gap-1.5`}>
       {isWinner && <span className="shrink-0">▸ </span>}
       <span className="truncate">{name}</span>
       {tied && (
@@ -144,7 +146,7 @@ const PlayerRow = ({ name, score, isWinner, hasScore, tied }) => (
         </span>
       )}
     </div>
-    <div className={`font-mono font-bold tabular-nums ${isWinner ? 'text-white text-lg' : hasScore ? 'text-neutral-500 text-lg' : 'text-neutral-700 text-sm'}`}>
+    <div className={`font-mono font-bold tabular-nums ${isWinner ? 'text-neutral-900 text-lg' : hasScore ? 'text-neutral-500 text-lg' : 'text-neutral-500 text-sm'}`}>
       {hasScore ? score : '—'}
     </div>
   </div>
@@ -167,16 +169,16 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
       style={{
         // Completed matches get a green-tinted body, not just a green outline, so a
         // fast scroll reads as bands of colour rather than rows of near-identical cards.
-        backgroundColor: isFinal ? '#0d1912' : isLive ? '#1a1a1a' : '#131313',
-        border: `1px solid ${isFinal ? '#15803d' : isLive ? c.accent : involvesMe ? '#fbbf24' : '#2a2a2a'}`,
+        backgroundColor: isFinal ? '#f0fdf4' : isLive ? '#fffbeb' : '#ffffff',
+        border: `1px solid ${isFinal ? '#15803d' : isLive ? c.accent : involvesMe ? '#fbbf24' : '#e5e7eb'}`,
         boxShadow: isLive ? `0 0 24px ${c.accent}30, inset 0 1px 0 ${c.accent}20` : isFinal ? 'inset 3px 0 0 #15803d' : involvesMe ? '0 0 0 1px #fbbf2440' : 'none',
       }}>
       {isLive && !isFinal && (
         <div className="absolute -top-2 left-3 px-2 py-0.5 text-[10px] font-bold tracking-widest flex items-center gap-1"
-             style={{ backgroundColor: c.accent, color: '#000' }}>
+             style={{ backgroundColor: c.accent, color: '#fff' }}>
           <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full rounded-full animate-ping" style={{ backgroundColor: '#000', opacity: 0.5 }}></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-black"></span>
+            <span className="absolute inline-flex h-full w-full rounded-full animate-ping" style={{ backgroundColor: '#fff', opacity: 0.6 }}></span>
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
           </span>
           LIVE
         </div>
@@ -230,24 +232,24 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
         <div className="space-y-1.5">
           <PlayerRow name={displayP1} score={row?.score1} isWinner={winner === 1} hasScore={hasScore} tied={p1Tied} />
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-px bg-neutral-800"></div>
-            <span className="text-[10px] text-neutral-600 font-mono">VS</span>
-            <div className="flex-1 h-px bg-neutral-800"></div>
+            <div className="flex-1 h-px bg-neutral-100"></div>
+            <span className="text-[10px] text-neutral-500 font-mono">VS</span>
+            <div className="flex-1 h-px bg-neutral-100"></div>
           </div>
           <PlayerRow name={displayP2} score={row?.score2} isWinner={winner === 2} hasScore={hasScore} tied={p2Tied} />
         </div>
 
         {isFinal && winnerName && (
           <div className="mt-3 px-3 py-2 rounded flex items-center gap-2"
-               style={{ backgroundColor: '#0f1a0f', border: '1px solid #15803d' }}>
-            <Trophy className="w-4 h-4 shrink-0 text-green-400" />
-            <div className="text-[11px] uppercase tracking-widest font-bold text-green-400 truncate">
+               style={{ backgroundColor: '#f0fdf4', border: '1px solid #15803d' }}>
+            <Trophy className="w-4 h-4 shrink-0 text-green-700" />
+            <div className="text-[11px] uppercase tracking-widest font-bold text-green-700 truncate">
               Winner · {winnerName}
             </div>
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-3 pt-2 border-t border-neutral-800/60">
+        <div className="flex items-center justify-between mt-3 pt-2 border-t border-neutral-200/60">
           <div className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider">
             Umpire · {match.umpire || '—'}
           </div>
@@ -255,7 +257,7 @@ const MatchCard = ({ match, row, isLive, onEdit, myPlayer, resolvedP1, resolvedP
             className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 transition-colors"
             style={{
               color: isFinal ? '#737373' : c.accent,
-              border: `1px solid ${isFinal ? '#404040' : c.accent}60`,
+              border: `1px solid ${isFinal ? '#d1d5db' : c.accent}60`,
             }}>
             <Edit3 className="w-2.5 h-2.5" />{isFinal ? 'Edit' : 'Score'}
           </button>
@@ -382,23 +384,23 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
-      <div className="relative w-full max-w-lg my-auto" style={{ backgroundColor: '#0a0a0a', border: `1px solid ${c.accent}` }}>
+      <div className="relative w-full max-w-lg my-auto" style={{ backgroundColor: '#ffffff', border: `1px solid ${c.accent}` }}>
         <div className="absolute -top-px left-0 right-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${c.accent}, transparent)` }}></div>
 
-        <div className="flex items-center justify-between p-4 border-b border-neutral-800">
+        <div className="flex items-center justify-between p-4 border-b border-neutral-200">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <CategoryBadge cat={match.cat} small />
               <span className="text-[11px] text-neutral-500 font-mono">{formatTime12h(match.time)} · COURT {match.court}</span>
             </div>
-            {match.label && <div className="text-xs text-amber-300 font-bold mb-1">{match.label}</div>}
-            <div className="text-xs text-neutral-400 uppercase tracking-wider">Umpire · {match.umpire || '—'}</div>
+            {match.label && <div className="text-xs text-amber-700 font-bold mb-1">{match.label}</div>}
+            <div className="text-xs text-neutral-600 uppercase tracking-wider">Umpire · {match.umpire || '—'}</div>
           </div>
-          <button onClick={onClose} className="text-neutral-500 hover:text-white"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-900"><X className="w-5 h-5" /></button>
         </div>
 
         {!pinLocked ? (
-          <div className="p-5 border-b border-neutral-800">
+          <div className="p-5 border-b border-neutral-200">
             <label className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-500 mb-2">
               <Lock className="w-3 h-3" /> Umpire PIN to start scoring
             </label>
@@ -407,39 +409,39 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={(e) => { if (e.key === 'Enter') tryLockPin(); }}
                 autoFocus
-                className="flex-1 text-center text-2xl font-mono tabular-nums bg-transparent py-3 outline-none text-white tracking-[0.5em]"
+                className="flex-1 text-center text-2xl font-mono tabular-nums bg-transparent py-3 outline-none text-neutral-900 tracking-[0.5em]"
                 style={{ border: '1px solid #3f3f3f' }} placeholder="••••" />
               <button onClick={tryLockPin}
                 className="px-4 text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50"
-                style={{ backgroundColor: c.accent, color: '#000' }}
+                style={{ backgroundColor: c.accent, color: '#fff' }}
                 disabled={pin.length !== 4 || syncState === 'saving'}>
                 {syncState === 'saving' ? '…' : 'Unlock'}
               </button>
             </div>
-            <div className="text-[10px] text-neutral-600 mt-1.5">
+            <div className="text-[10px] text-neutral-500 mt-1.5">
               Your match PIN — or the admin PIN if an umpire's doesn't work
             </div>
-            {err && <div className="mt-3 text-xs text-red-400 text-center">{err}</div>}
+            {err && <div className="mt-3 text-xs text-red-700 text-center">{err}</div>}
           </div>
         ) : (
-          <div className="px-4 py-2 border-b border-neutral-800 flex items-center justify-between text-[10px]">
+          <div className="px-4 py-2 border-b border-neutral-200 flex items-center justify-between text-[10px]">
             <div className="flex items-center gap-2">
-              <Lock className="w-3 h-3 text-green-400" />
-              <span className="text-green-400 uppercase tracking-widest font-bold">PIN verified</span>
-              <span className="text-neutral-600">—</span>
+              <Lock className="w-3 h-3 text-green-700" />
+              <span className="text-green-700 uppercase tracking-widest font-bold">PIN verified</span>
+              <span className="text-neutral-500">—</span>
               <SyncBadge state={syncState} />
             </div>
-            <button onClick={unlockPin} className="text-neutral-500 hover:text-white uppercase tracking-widest">Change PIN</button>
+            <button onClick={unlockPin} className="text-neutral-500 hover:text-neutral-900 uppercase tracking-widest">Change PIN</button>
           </div>
         )}
 
         {pinLocked && (
           <>
-            <div className="flex border-b border-neutral-800">
+            <div className="flex border-b border-neutral-200">
               <button onClick={() => setMode('live')}
                 className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
                 style={{
-                  backgroundColor: mode === 'live' ? '#131313' : 'transparent',
+                  backgroundColor: mode === 'live' ? '#f3f4f6' : 'transparent',
                   color: mode === 'live' ? c.accent : '#737373',
                   borderBottom: `2px solid ${mode === 'live' ? c.accent : 'transparent'}`,
                 }}>
@@ -448,7 +450,7 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
               <button onClick={() => setMode('final')}
                 className="flex-1 py-2.5 text-xs font-bold uppercase tracking-widest transition-colors"
                 style={{
-                  backgroundColor: mode === 'final' ? '#131313' : 'transparent',
+                  backgroundColor: mode === 'final' ? '#f3f4f6' : 'transparent',
                   color: mode === 'final' ? c.accent : '#737373',
                   borderBottom: `2px solid ${mode === 'final' ? c.accent : 'transparent'}`,
                 }}>
@@ -456,9 +458,9 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
               </button>
             </div>
 
-            <div className="px-4 py-2 text-center text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-900">
-              First to <span className="font-bold text-white">{row?.scoring_format || 21}</span> points
-              {row?.match_type === 'prelim' && <span className="ml-2 text-neutral-600">· Prelim</span>}
+            <div className="px-4 py-2 text-center text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-200">
+              First to <span className="font-bold text-neutral-900">{row?.scoring_format || 21}</span> points
+              {row?.match_type === 'prelim' && <span className="ml-2 text-neutral-500">· Prelim</span>}
               {row?.match_type === 'semi' && <span className="ml-2 text-yellow-600">· Semi-Final</span>}
               {row?.match_type === 'final' && <span className="ml-2 text-yellow-600">· Championship</span>}
             </div>
@@ -471,50 +473,50 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
               <PlayerScorePanel name={displayP1} score={s1} isLeading={winnerAhead === 1}
                 onPlus={() => bump(1, +1)} onMinus={() => bump(1, -1)} color={c} />
               <div className="flex items-center gap-2">
-                <div className="flex-1 h-px bg-neutral-800"></div>
-                <span className="text-[10px] text-neutral-600 font-mono tracking-widest">VS</span>
-                <div className="flex-1 h-px bg-neutral-800"></div>
+                <div className="flex-1 h-px bg-neutral-100"></div>
+                <span className="text-[10px] text-neutral-500 font-mono tracking-widest">VS</span>
+                <div className="flex-1 h-px bg-neutral-100"></div>
               </div>
               <PlayerScorePanel name={displayP2} score={s2} isLeading={winnerAhead === 2}
                 onPlus={() => bump(2, +1)} onMinus={() => bump(2, -1)} color={c} />
             </div>
 
             {(s1 > (row?.scoring_format || 21) || s2 > (row?.scoring_format || 21)) && !row?.is_final && (
-              <div className="mt-5 p-3 rounded bg-orange-950/50 border border-orange-800/50 text-orange-300 text-xs">
+              <div className="mt-5 p-3 rounded bg-orange-950/50 border border-orange-800/50 text-orange-700 text-xs">
                 <div className="font-bold uppercase tracking-wider mb-1">⚠️ Score exceeds {row?.scoring_format || 21}</div>
-                <div className="text-orange-400/80">This match is first to {row?.scoring_format || 21} points. Consider marking complete if this is the final score.</div>
+                <div className="text-orange-600/80">This match is first to {row?.scoring_format || 21} points. Consider marking complete if this is the final score.</div>
               </div>
             )}
 
             {!row?.is_final ? (
               <button onClick={markAsFinal} disabled={syncState === 'saving' || (s1 === 0 && s2 === 0)}
                 className="w-full mt-5 py-4 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ backgroundColor: c.accent, color: '#000' }}>
+                style={{ backgroundColor: c.accent, color: '#fff' }}>
                 <Trophy className="w-4 h-4" /> Mark Complete — {winnerAhead === 1 ? displayP1 : winnerAhead === 2 ? displayP2 : 'Winner TBD'} {winnerAhead > 0 && 'wins'}
               </button>
             ) : (
-              <div className="mt-5 rounded p-3 flex items-center justify-between" style={{ backgroundColor: '#0f1a0f', border: '1px solid #1f5f1f' }}>
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest font-bold text-green-400">
+              <div className="mt-5 rounded p-3 flex items-center justify-between" style={{ backgroundColor: '#f0fdf4', border: '1px solid #1f5f1f' }}>
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest font-bold text-green-700">
                   <Trophy className="w-4 h-4" /> Complete · {winnerAhead === 1 ? displayP1 : displayP2} wins
                 </div>
                 <button onClick={async () => { await saveScore(s1, s2, false); }}
-                  className="text-[10px] uppercase tracking-widest text-neutral-500 hover:text-white transition-colors">
+                  className="text-[10px] uppercase tracking-widest text-neutral-500 hover:text-neutral-900 transition-colors">
                   Undo complete
                 </button>
               </div>
             )}
 
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-900">
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-neutral-200">
               <button onClick={clearScore}
-                className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-neutral-500 hover:text-red-400 transition-colors">
+                className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-neutral-500 hover:text-red-700 transition-colors">
                 <RotateCcw className="w-3 h-3" /> Reset to 0-0
               </button>
-              <div className="text-[10px] text-neutral-600 tracking-widest">
+              <div className="text-[10px] text-neutral-500 tracking-widest">
                 Every tap syncs live
               </div>
             </div>
 
-            {err && <div className="mt-3 text-xs text-red-400 text-center">{err}</div>}
+            {err && <div className="mt-3 text-xs text-red-700 text-center">{err}</div>}
           </div>
         )}
 
@@ -526,26 +528,26 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
             <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
               <div>
                 <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 1</div>
-                <div className="text-sm font-bold mb-3 text-white truncate">{displayP1}</div>
+                <div className="text-sm font-bold mb-3 text-neutral-900 truncate">{displayP1}</div>
                 <input type="number" min="0" inputMode="numeric" value={finalS1} onChange={(e) => setFinalS1(e.target.value)}
-                  className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
+                  className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-neutral-900"
                   style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
               </div>
-              <div className="text-neutral-600 font-mono text-xs pt-8">VS</div>
+              <div className="text-neutral-500 font-mono text-xs pt-8">VS</div>
               <div>
                 <div className="text-xs text-neutral-500 mb-2 uppercase tracking-wider">Player 2</div>
-                <div className="text-sm font-bold mb-3 text-white truncate">{displayP2}</div>
+                <div className="text-sm font-bold mb-3 text-neutral-900 truncate">{displayP2}</div>
                 <input type="number" min="0" inputMode="numeric" value={finalS2} onChange={(e) => setFinalS2(e.target.value)}
-                  className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-white"
+                  className="w-full text-center text-5xl font-bold font-mono tabular-nums bg-transparent py-3 outline-none text-neutral-900"
                   style={{ border: `1px solid ${c.accent}60` }} placeholder="0" />
               </div>
             </div>
 
-            {err && <div className="mt-3 text-xs text-red-400 text-center">{err}</div>}
+            {err && <div className="mt-3 text-xs text-red-700 text-center">{err}</div>}
 
             <button onClick={saveFinal} disabled={syncState === 'saving'}
               className="w-full mt-5 py-3 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              style={{ backgroundColor: c.accent, color: '#000' }}>
+              style={{ backgroundColor: c.accent, color: '#fff' }}>
               <Check className="w-4 h-4" /> {syncState === 'saving' ? 'Saving…' : 'Save Final Score'}
             </button>
           </div>
@@ -556,36 +558,36 @@ const ScoreModal = ({ match, row, onSave, onClose, resolvedP1, resolvedP2 }) => 
 };
 
 const SyncBadge = ({ state }) => {
-  if (state === 'saving') return <span className="text-neutral-400 uppercase tracking-widest">Syncing…</span>;
-  if (state === 'saved') return <span className="text-green-400 uppercase tracking-widest flex items-center gap-1"><Check className="w-3 h-3" />Saved</span>;
-  if (state === 'error') return <span className="text-red-400 uppercase tracking-widest">Error</span>;
-  return <span className="text-neutral-600 uppercase tracking-widest">Ready</span>;
+  if (state === 'saving') return <span className="text-neutral-600 uppercase tracking-widest">Syncing…</span>;
+  if (state === 'saved') return <span className="text-green-700 uppercase tracking-widest flex items-center gap-1"><Check className="w-3 h-3" />Saved</span>;
+  if (state === 'error') return <span className="text-red-700 uppercase tracking-widest">Error</span>;
+  return <span className="text-neutral-500 uppercase tracking-widest">Ready</span>;
 };
 
 const PlayerScorePanel = ({ name, score, isLeading, onPlus, onMinus, color }) => {
   return (
     <div className="p-3 rounded" style={{
-      backgroundColor: isLeading ? '#131313' : 'transparent',
-      border: `1px solid ${isLeading ? color.accent + '80' : '#2a2a2a'}`,
+      backgroundColor: isLeading ? '#f3f4f6' : 'transparent',
+      border: `1px solid ${isLeading ? color.accent + '80' : '#e5e7eb'}`,
     }}>
       <div className="flex items-center justify-between mb-2">
-        <div className={`text-sm font-bold truncate ${isLeading ? 'text-white' : 'text-neutral-300'}`}>
+        <div className={`text-sm font-bold truncate ${isLeading ? 'text-neutral-900' : 'text-neutral-700'}`}>
           {isLeading && <span style={{ color: color.accent }}>▸ </span>}{name}
         </div>
       </div>
       <div className="flex items-center gap-2">
         <button onClick={onMinus} disabled={score === 0}
           className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-          style={{ backgroundColor: '#1a1a1a', border: '1px solid #3f3f3f', color: '#a3a3a3' }}
+          style={{ backgroundColor: '#f3f4f6', border: '1px solid #d1d5db', color: '#4b5563' }}
           aria-label="Decrement">
           <Minus className="w-6 h-6" />
         </button>
-        <div className="flex-1 text-center font-mono font-black tabular-nums text-6xl sm:text-7xl py-2" style={{ color: isLeading ? '#fff' : '#a3a3a3' }}>
+        <div className="flex-1 text-center font-mono font-black tabular-nums text-6xl sm:text-7xl py-2" style={{ color: isLeading ? '#111827' : '#9ca3af' }}>
           {score}
         </div>
         <button onClick={onPlus}
           className="shrink-0 w-14 h-14 sm:w-16 sm:h-16 flex items-center justify-center transition-all active:scale-95"
-          style={{ backgroundColor: color.accent, color: '#000' }}
+          style={{ backgroundColor: color.accent, color: '#fff' }}
           aria-label="Increment">
           <Plus className="w-7 h-7" strokeWidth={3} />
         </button>
@@ -675,8 +677,8 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
     const hasLiveMatch = !dim && slotMatches.some(m => isMatchLive(matches[m.id], now));
     return (
       <div key={slot} className="mb-8">
-        <div className={`flex items-baseline gap-3 mb-3 py-2 ${dim ? '' : 'sticky top-14 z-10'}`} style={{ backgroundColor: '#050505' }}>
-          <div className={`text-2xl font-bold font-mono tabular-nums ${dim ? 'text-neutral-500' : 'text-white'}`}>{formatTime12h(slot)}</div>
+        <div className={`flex items-baseline gap-3 mb-3 py-2 ${dim ? '' : 'sticky top-14 z-10'}`} style={{ backgroundColor: '#f4f5f7' }}>
+          <div className={`text-2xl font-bold font-mono tabular-nums ${dim ? 'text-neutral-500' : 'text-neutral-900'}`}>{formatTime12h(slot)}</div>
           {hasLiveMatch && (
             <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold tracking-widest" style={{ backgroundColor: '#ef4444', color: '#fff' }}>
               <span className="relative flex h-1.5 w-1.5">
@@ -686,8 +688,8 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
               NOW PLAYING
             </div>
           )}
-          <div className="flex-1 h-px bg-neutral-800"></div>
-          {slot === '16:00' && <div className="text-[10px] uppercase tracking-widest text-amber-400">Tea Break</div>}
+          <div className="flex-1 h-px bg-neutral-100"></div>
+          {slot === '16:00' && <div className="text-[10px] uppercase tracking-widest text-amber-600">Tea Break</div>}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {slotMatches.map(m => {
@@ -706,9 +708,9 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
           <button key={cat} onClick={() => setCatFilter(cat)}
             className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all"
             style={{
-              backgroundColor: catFilter === cat ? (cat === 'ALL' ? '#fff' : CAT_COLORS[cat]?.accent) : 'transparent',
-              color: catFilter === cat ? '#000' : '#a3a3a3',
-              border: `1px solid ${catFilter === cat ? 'transparent' : '#3f3f3f'}`,
+              backgroundColor: catFilter === cat ? (cat === 'ALL' ? '#111827' : CAT_COLORS[cat]?.accent) : 'transparent',
+              color: catFilter === cat ? '#fff' : '#6b7280',
+              border: `1px solid ${catFilter === cat ? 'transparent' : '#d1d5db'}`,
             }}>
             {cat === 'ALL' ? 'All' : cat}
           </button>
@@ -716,7 +718,7 @@ const ScheduleTab = ({ matches, now, onEdit, myPlayer, standings }) => {
       </div>
 
       {pending.length === 0 && done.length > 0 && (
-        <div className="mb-8 p-4 text-center text-sm text-neutral-400 border border-neutral-800">
+        <div className="mb-8 p-4 text-center text-sm text-neutral-600 border border-neutral-200">
           Every match here has been played.
         </div>
       )}
@@ -750,20 +752,20 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
 
   return (
     <div className="mb-8">
-      <div className="text-lg font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-        <Trophy className="w-5 h-5 text-amber-400" />
+      <div className="text-lg font-bold text-neutral-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <Trophy className="w-5 h-5 text-amber-600" />
         {title}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {Object.entries(byCat).map(([cat, items]) => {
           const c = CAT_COLORS[cat];
           return (
-            <div key={cat} style={{ backgroundColor: '#0a0a0a', border: `1px solid ${c.accent}40` }}>
-              <div className="px-4 py-3 border-b border-neutral-800 flex items-center gap-2">
+            <div key={cat} style={{ backgroundColor: '#ffffff', border: `1px solid ${c.accent}40` }}>
+              <div className="px-4 py-3 border-b border-neutral-200 flex items-center gap-2">
                 <CategoryBadge cat={cat} small />
-                <div className="text-sm font-bold uppercase tracking-wider text-white">{CAT_LABELS[cat]}</div>
+                <div className="text-sm font-bold uppercase tracking-wider text-neutral-900">{CAT_LABELS[cat]}</div>
               </div>
-              <div className="divide-y divide-neutral-900">
+              <div className="divide-y divide-neutral-200">
                 {items.map(item => {
                   let p1Name, p2Name, winner;
 
@@ -833,7 +835,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
 
                   return (
                     <div key={item.id} className="p-3">
-                      <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mb-2 flex items-center gap-2">
+                      <div className="text-[10px] uppercase tracking-widest text-amber-600 font-bold mb-2 flex items-center gap-2">
                         <span>{item.label}</span>
                         {override && (
                           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider"
@@ -845,7 +847,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                       <div className="space-y-2">
                         {/* Team 1 */}
                         <div className="flex items-center justify-between gap-2">
-                          <div className={`text-sm ${winner === p1Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1 flex items-center gap-1.5`}>
+                          <div className={`text-sm ${winner === p1Name ? 'font-bold text-neutral-900' : 'text-neutral-700'} truncate flex-1 flex items-center gap-1.5`}>
                             <span className="truncate">{winner === p1Name && '▸ '}{p1Name}</span>
                             {p1Tied && (
                               <span className="shrink-0 text-[9px] font-bold tracking-widest px-1 py-0.5 rounded"
@@ -856,7 +858,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                           </div>
                           <div className="flex gap-1 font-mono font-bold tabular-nums">
                             {sets.map(s => (
-                              <span key={s.setNum} className={`text-sm px-1.5 min-w-[24px] text-center ${s.score1 != null ? (s.score1 > s.score2 ? 'text-white bg-neutral-800' : 'text-neutral-500') : 'text-neutral-700'}`}>
+                              <span key={s.setNum} className={`text-sm px-1.5 min-w-[24px] text-center ${s.score1 != null ? (s.score1 > s.score2 ? 'text-neutral-900 bg-neutral-100' : 'text-neutral-500') : 'text-neutral-500'}`}>
                                 {s.score1 ?? '—'}
                               </span>
                             ))}
@@ -864,7 +866,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                         </div>
                         {/* Team 2 */}
                         <div className="flex items-center justify-between gap-2">
-                          <div className={`text-sm ${winner === p2Name ? 'font-bold text-white' : 'text-neutral-300'} truncate flex-1 flex items-center gap-1.5`}>
+                          <div className={`text-sm ${winner === p2Name ? 'font-bold text-neutral-900' : 'text-neutral-700'} truncate flex-1 flex items-center gap-1.5`}>
                             <span className="truncate">{winner === p2Name && '▸ '}{p2Name}</span>
                             {p2Tied && (
                               <span className="shrink-0 text-[9px] font-bold tracking-widest px-1 py-0.5 rounded"
@@ -875,7 +877,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                           </div>
                           <div className="flex gap-1 font-mono font-bold tabular-nums">
                             {sets.map(s => (
-                              <span key={s.setNum} className={`text-sm px-1.5 min-w-[24px] text-center ${s.score2 != null ? (s.score2 > s.score1 ? 'text-white bg-neutral-800' : 'text-neutral-500') : 'text-neutral-700'}`}>
+                              <span key={s.setNum} className={`text-sm px-1.5 min-w-[24px] text-center ${s.score2 != null ? (s.score2 > s.score1 ? 'text-neutral-900 bg-neutral-100' : 'text-neutral-500') : 'text-neutral-500'}`}>
                                 {s.score2 ?? '—'}
                               </span>
                             ))}
@@ -883,7 +885,7 @@ const PlayoffsTable = ({ structures, matches, standings, isSemi, title }) => {
                         </div>
                       </div>
                       {winner && (
-                        <div className="mt-2 text-[10px] uppercase tracking-widest font-bold text-green-400 flex items-center gap-1">
+                        <div className="mt-2 text-[10px] uppercase tracking-widest font-bold text-green-700 flex items-center gap-1">
                           <Trophy className="w-3 h-3" /> Winner · {winner}
                         </div>
                       )}
@@ -909,27 +911,27 @@ const StandingsTab = ({ matches, standings }) => {
             className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition-all"
             style={{
               backgroundColor: activeCat === cat ? CAT_COLORS[cat].accent : 'transparent',
-              color: activeCat === cat ? '#000' : '#a3a3a3',
-              border: `1px solid ${activeCat === cat ? 'transparent' : '#3f3f3f'}`,
+              color: activeCat === cat ? '#fff' : '#6b7280',
+              border: `1px solid ${activeCat === cat ? 'transparent' : '#d1d5db'}`,
             }}>{CAT_LABELS[cat]}</button>
         ))}
       </div>
       
       {/* Group standings */}
-      <div className="text-lg font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+      <div className="text-lg font-bold text-neutral-900 uppercase tracking-wider mb-4 flex items-center gap-2">
         <BarChart3 className="w-5 h-5" style={{ color: CAT_COLORS[activeCat].accent }} />
         Group Stage
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {Object.entries(standings[activeCat] || {}).map(([groupName, rows]) => (
-          <div key={groupName} style={{ backgroundColor: '#0a0a0a', border: '1px solid #2a2a2a' }}>
-            <div className="px-4 py-3 border-b border-neutral-800 flex items-center gap-2">
+          <div key={groupName} style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb' }}>
+            <div className="px-4 py-3 border-b border-neutral-200 flex items-center gap-2">
               <CategoryBadge cat={activeCat} small />
-              <div className="text-sm font-bold uppercase tracking-wider text-white">{groupName}</div>
+              <div className="text-sm font-bold uppercase tracking-wider text-neutral-900">{groupName}</div>
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-800">
+                <tr className="text-[10px] uppercase tracking-widest text-neutral-500 border-b border-neutral-200">
                   <th className="text-left p-2 pl-4 w-8">#</th>
                   <th className="text-left p-2">Player</th>
                   <th className="text-center p-2 w-8">P</th>
@@ -943,19 +945,19 @@ const StandingsTab = ({ matches, standings }) => {
                   const diff = r.pointsFor - r.pointsAgainst;
                   const q = i < advanceCountForGroup(activeCat, groupName) && r.played > 0;
                   return (
-                    <tr key={r.name} className="border-b border-neutral-900 last:border-0">
+                    <tr key={r.name} className="border-b border-neutral-200 last:border-0">
                       <td className="p-2 pl-4 font-mono text-neutral-500">{q ? <span style={{ color: CAT_COLORS[activeCat].accent }}>{i+1}</span> : (i+1)}</td>
-                      <td className="p-2 text-white">{r.name}</td>
-                      <td className="p-2 text-center font-mono tabular-nums text-neutral-400">{r.played}</td>
-                      <td className="p-2 text-center font-mono tabular-nums font-bold text-white">{r.won}</td>
+                      <td className="p-2 text-neutral-900">{r.name}</td>
+                      <td className="p-2 text-center font-mono tabular-nums text-neutral-600">{r.played}</td>
+                      <td className="p-2 text-center font-mono tabular-nums font-bold text-neutral-900">{r.won}</td>
                       <td className="p-2 text-center font-mono tabular-nums text-neutral-500">{r.lost}</td>
-                      <td className={`p-2 text-center font-mono tabular-nums ${diff > 0 ? 'text-green-400' : diff < 0 ? 'text-red-400' : 'text-neutral-500'}`}>{diff > 0 ? '+' : ''}{diff}</td>
+                      <td className={`p-2 text-center font-mono tabular-nums ${diff > 0 ? 'text-green-700' : diff < 0 ? 'text-red-700' : 'text-neutral-500'}`}>{diff > 0 ? '+' : ''}{diff}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            <div className="px-4 py-2 border-t border-neutral-800 text-[10px] text-neutral-600 tracking-wider">
+            <div className="px-4 py-2 border-t border-neutral-200 text-[10px] text-neutral-500 tracking-wider">
               <span style={{ color: CAT_COLORS[activeCat].accent }}>●</span> Top {advanceCountForGroup(activeCat, groupName)} advance{advanceCountForGroup(activeCat, groupName) === 1 ? 's' : ''} to the next round
             </div>
           </div>
@@ -1008,7 +1010,7 @@ const KnockoutTable = ({ cat, matches, standings }) => {
   return (
     <div className="mt-10">
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-lg font-bold text-white uppercase tracking-wider">Knockout — QF One Game · SF, Final & 3rd Best of 3</h2>
+        <h2 className="text-lg font-bold text-neutral-900 uppercase tracking-wider">Knockout — QF One Game · SF, Final & 3rd Best of 3</h2>
         {champion && (
           <span className="px-2 py-1 text-xs font-bold rounded bg-yellow-300 text-yellow-900">🏆 CHAMPION · {champion}</span>
         )}
@@ -1018,11 +1020,11 @@ const KnockoutTable = ({ cat, matches, standings }) => {
           const roundEntries = entries.filter(([_, k]) => k.round === round.key);
           if (roundEntries.length === 0) return null;
           return (
-            <div key={round.key} className="border border-neutral-800" style={{ backgroundColor: '#0a0a0a' }}>
-              <div className="px-4 py-2 border-b border-neutral-800 text-xs font-bold uppercase tracking-widest text-neutral-400">
+            <div key={round.key} className="border border-neutral-200" style={{ backgroundColor: '#ffffff' }}>
+              <div className="px-4 py-2 border-b border-neutral-200 text-xs font-bold uppercase tracking-widest text-neutral-600">
                 {round.title}
               </div>
-              <div className="divide-y divide-neutral-900">
+              <div className="divide-y divide-neutral-200">
                 {roundEntries.map(([id, k]) => {
                   const sched = SCHEDULE.find(m => (m.parentMatchId || m.id) === id);
                   const resolved = sched ? resolvePlayoffNames(sched, standings, matches) : { p1: null, p2: null };
@@ -1045,16 +1047,16 @@ const KnockoutTable = ({ cat, matches, standings }) => {
                   }
                   return (
                     <div key={id} className="px-4 py-2 flex items-center gap-3 text-sm">
-                      <span className="font-mono text-[10px] text-neutral-600 w-14 shrink-0">
+                      <span className="font-mono text-[10px] text-neutral-500 w-14 shrink-0">
                         {sched ? `${formatTime12h(sched.time)} · C${sched.court}` : ''}
                       </span>
-                      <span className={`flex-1 truncate text-right ${w === 1 ? 'font-bold text-green-400' : resolved.p1 ? 'text-white' : 'text-neutral-500'}`}>
+                      <span className={`flex-1 truncate text-right ${w === 1 ? 'font-bold text-green-700' : resolved.p1 ? 'text-neutral-900' : 'text-neutral-500'}`}>
                         {p1}{resolved.p1Tied ? ' *' : ''}
                       </span>
-                      <span className="font-mono tabular-nums text-neutral-300 shrink-0 whitespace-nowrap">
+                      <span className="font-mono tabular-nums text-neutral-700 shrink-0 whitespace-nowrap">
                         {scoreStr}
                       </span>
-                      <span className={`flex-1 truncate ${w === 2 ? 'font-bold text-green-400' : resolved.p2 ? 'text-white' : 'text-neutral-500'}`}>
+                      <span className={`flex-1 truncate ${w === 2 ? 'font-bold text-green-700' : resolved.p2 ? 'text-neutral-900' : 'text-neutral-500'}`}>
                         {p2}{resolved.p2Tied ? ' *' : ''}
                       </span>
                     </div>
@@ -1065,7 +1067,7 @@ const KnockoutTable = ({ cat, matches, standings }) => {
           );
         })}
       </div>
-      <div className="mt-2 text-[10px] text-neutral-600 tracking-wider">
+      <div className="mt-2 text-[10px] text-neutral-500 tracking-wider">
         Names fill in automatically as the group stage and earlier rounds finish. * = tie in group standings, decided by head-to-head/committee.
       </div>
     </div>
@@ -1083,12 +1085,12 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
 
   return (
     <div>
-      <div className="mb-6" style={{ backgroundColor: '#0a0a0a', border: '1px solid #2a2a2a' }}>
+      <div className="mb-6" style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb' }}>
         <div className="p-4">
           <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-2">Select your name</div>
           <select value={myPlayer || ''} onChange={(e) => setMyPlayer(e.target.value)}
-            className="w-full bg-black text-white p-3 font-mono text-sm outline-none"
-            style={{ border: '1px solid #fbbf24' }}>
+            className="w-full bg-white text-neutral-900 p-3 font-mono text-sm outline-none"
+            style={{ border: '1px solid #d1d5db' }}>
             <option value="">— Choose a player —</option>
             {ALL_PLAYERS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -1099,7 +1101,7 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
           {playing.length > 0 && (
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-3">
-                <div className="text-sm font-bold uppercase tracking-wider text-white">Playing</div>
+                <div className="text-sm font-bold uppercase tracking-wider text-neutral-900">Playing</div>
                 <div className="text-xs text-neutral-500 font-mono">· {playing.length} {playing.length === 1 ? 'match' : 'matches'}</div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1118,7 +1120,7 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
           {umpiring.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <div className="text-sm font-bold uppercase tracking-wider text-white">Umpiring</div>
+                <div className="text-sm font-bold uppercase tracking-wider text-neutral-900">Umpiring</div>
                 <div className="text-xs text-neutral-500 font-mono">· {umpiring.length} {umpiring.length === 1 ? 'match' : 'matches'}</div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1134,7 +1136,7 @@ const MyMatchesTab = ({ matches, now, onEdit, myPlayer, setMyPlayer, standings }
               </div>
             </div>
           )}
-          {my.length === 0 && <div className="text-center py-12 text-neutral-500">No matches found for <span className="text-white">{myPlayer}</span>.</div>}
+          {my.length === 0 && <div className="text-center py-12 text-neutral-500">No matches found for <span className="text-neutral-900">{myPlayer}</span>.</div>}
         </>
       )}
     </div>
@@ -1174,22 +1176,22 @@ export default function TournamentApp() {
   const editingResolved = editing ? resolvePlayoffNames(editing, standings, matches) : { p1: null, p2: null, p1Tied: false, p2Tied: false };
 
   return (
-    <div className="min-h-screen text-white" style={{ backgroundColor: '#050505' }}>
-      <header className="relative border-b border-neutral-900 overflow-hidden" style={{ background: 'linear-gradient(180deg, #0a0a0a 0%, #050505 100%)' }}>
+    <div className="min-h-screen text-neutral-900" style={{ backgroundColor: '#f4f5f7' }}>
+      <header className="relative border-b border-neutral-200 overflow-hidden" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)' }}>
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,0.03) 40px, rgba(255,255,255,0.03) 41px)' }}></div>
         <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
           <div className="flex items-start md:items-center justify-between gap-4 flex-col md:flex-row">
             <div>
               <div className="flex items-center gap-2 text-[10px] tracking-[0.3em] text-neutral-500 uppercase mb-2">
-                <span className="inline-block w-6 h-px bg-neutral-700"></span>
+                <span className="inline-block w-6 h-px bg-neutral-200"></span>
                 Badminton Tournament · Live
               </div>
-              <h1 className="font-display text-5xl md:text-7xl font-bold leading-none text-white">{TOURNAMENT.name}</h1>
+              <h1 className="font-display text-5xl md:text-7xl font-bold leading-none text-neutral-900">{TOURNAMENT.name}</h1>
               <div className="flex items-baseline gap-3 mt-2 font-mono text-xs text-neutral-500 flex-wrap">
                 <span>{now ? now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : '—'}</span>
-                <span className="text-neutral-700">·</span>
+                <span className="text-neutral-500">·</span>
                 <span className="tabular-nums">{now ? now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
-                <span className="text-neutral-700">·</span>
+                <span className="text-neutral-500">·</span>
                 <span className="flex items-center gap-1" style={{ color: connected ? '#4ade80' : '#737373' }}>
                   {connected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
                   {connected ? 'LIVE SYNC' : 'OFFLINE'}
@@ -1199,22 +1201,22 @@ export default function TournamentApp() {
             <div className="flex gap-6 font-mono">
               <div>
                 <div className="text-[10px] text-neutral-500 uppercase tracking-widest">Group</div>
-                <div className="text-2xl font-bold tabular-nums text-white">{completed}<span className="text-neutral-600">/{totalNonPlayoff}</span></div>
+                <div className="text-2xl font-bold tabular-nums text-neutral-900">{completed}<span className="text-neutral-500">/{totalNonPlayoff}</span></div>
               </div>
               <div>
                 <div className="text-[10px] text-neutral-500 uppercase tracking-widest">Courts</div>
-                <div className="text-2xl font-bold tabular-nums text-white">{COURT_COUNT}</div>
+                <div className="text-2xl font-bold tabular-nums text-neutral-900">{COURT_COUNT}</div>
               </div>
               <div>
                 <div className="text-[10px] text-neutral-500 uppercase tracking-widest">Events</div>
-                <div className="text-2xl font-bold tabular-nums text-white">{EVENT_COUNT}</div>
+                <div className="text-2xl font-bold tabular-nums text-neutral-900">{EVENT_COUNT}</div>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <nav className="sticky top-0 z-20 border-b border-neutral-900" style={{ backgroundColor: 'rgba(5,5,5,0.95)', backdropFilter: 'blur(12px)' }}>
+      <nav className="sticky top-0 z-20 border-b border-neutral-200" style={{ backgroundColor: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)' }}>
         <div className="max-w-7xl mx-auto px-4 md:px-8 flex overflow-x-auto">
           {[
             { id: 'schedule', icon: Calendar, label: 'Schedule' },
@@ -1227,9 +1229,9 @@ export default function TournamentApp() {
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 className="relative flex items-center gap-2 px-4 md:px-5 py-4 text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap"
-                style={{ color: active ? '#fff' : '#737373' }}>
+                style={{ color: active ? '#111827' : '#6b7280' }}>
                 <Icon className="w-3.5 h-3.5" />{tab.label}
-                {active && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white"></div>}
+                {active && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-neutral-900"></div>}
               </button>
             );
           })}
@@ -1237,7 +1239,7 @@ export default function TournamentApp() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8">
-        {error && <div className="mb-4 p-3 text-sm text-red-400" style={{ backgroundColor: '#2a0a0a', border: '1px solid #7f1d1d' }}>Error: {error}</div>}
+        {error && <div className="mb-4 p-3 text-sm text-red-700" style={{ backgroundColor: '#fef2f2', border: '1px solid #7f1d1d' }}>Error: {error}</div>}
         {loading ? (
           <div className="text-center text-neutral-500 py-20">Loading tournament data…</div>
         ) : (
@@ -1250,7 +1252,7 @@ export default function TournamentApp() {
         )}
       </main>
 
-      <footer className="border-t border-neutral-900 mt-12 py-8">
+      <footer className="border-t border-neutral-200 mt-12 py-8">
         <div className="max-w-7xl mx-auto px-4 md:px-8">
           <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 md:gap-8 items-start">
             {TOURNAMENT.poster && (
@@ -1258,22 +1260,22 @@ export default function TournamentApp() {
                  className="block shrink-0 transition-opacity hover:opacity-80"
                  title="View full poster">
                 <img src={TOURNAMENT.poster} alt={`${TOURNAMENT.fullTitle} poster`}
-                     className="w-full md:w-48 h-auto rounded" style={{ border: '1px solid #2a2a2a' }} />
+                     className="w-full md:w-48 h-auto rounded" style={{ border: '1px solid #e5e7eb' }} />
               </a>
             )}
             <div className="flex-1">
               <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500 mb-2">
                 {TOURNAMENT.presentedBy}
               </div>
-              <div className="text-xl md:text-2xl font-bold text-white mb-1">
+              <div className="text-xl md:text-2xl font-bold text-neutral-900 mb-1">
                 {TOURNAMENT.fullTitle}
               </div>
               {TOURNAMENT.tagline && (
-                <div className="text-sm text-amber-300/80 italic mb-4 font-serif">
+                <div className="text-sm text-amber-700/80 italic mb-4 font-serif">
                   "{TOURNAMENT.tagline}"
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-neutral-300">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-neutral-700">
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">When</div>
                   <div>{TOURNAMENT.date} · {TOURNAMENT.timeRange}</div>
@@ -1284,7 +1286,7 @@ export default function TournamentApp() {
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Contact</div>
-                  <div>{TOURNAMENT.contact.name}{TOURNAMENT.contact.phone ? <> · <a href={`tel:${TOURNAMENT.contact.tel}`} className="text-white hover:text-amber-300 transition-colors">{TOURNAMENT.contact.phone}</a></> : null}</div>
+                  <div>{TOURNAMENT.contact.name}{TOURNAMENT.contact.phone ? <> · <a href={`tel:${TOURNAMENT.contact.tel}`} className="text-neutral-900 hover:text-amber-700 transition-colors">{TOURNAMENT.contact.phone}</a></> : null}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-0.5">Categories</div>
@@ -1293,7 +1295,7 @@ export default function TournamentApp() {
               </div>
             </div>
           </div>
-          <div className="mt-8 pt-4 border-t border-neutral-900 flex items-center justify-between text-[10px] text-neutral-600 uppercase tracking-widest">
+          <div className="mt-8 pt-4 border-t border-neutral-200 flex items-center justify-between text-[10px] text-neutral-500 uppercase tracking-widest">
             <span>Shared score-entry PIN · Any match, any device</span>
             <span>Realtime · Supabase</span>
           </div>
