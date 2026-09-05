@@ -4,9 +4,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   SCHEDULE, GROUPS, CAT_LABELS, NAME_ALIASES,
-  PLAYOFF_STRUCTURE, FINALS_STRUCTURE,
+  PLAYOFF_STRUCTURE, FINALS_STRUCTURE, ADVANCE_PER_GROUP, KNOCKOUT,
 } from '../lib/tournament-data';
-import { ADVANCE_PER_GROUP, KNOCKOUT } from '../lib/tournament-data';
+import {
+  getPlayoffOverride, normalizeName, namesMatch, arePrelimsComplete, headToHead,
+  calculateStandings, resolveSemiSlot, resolveSemiSlotAll, resolveKnockoutSlot,
+  knockoutSetWins, getKnockoutWinner, getKnockoutLoser, getSemiWinner,
+  advanceCountForGroup,
+} from '../lib/standings.mjs';
 import { TOURNAMENT } from '../lib/tournament-config.mjs';
 
 const COURTS = [...new Set(SCHEDULE.map(m => m.court))].sort((a, b) => a - b);
@@ -26,195 +31,6 @@ const timeToMinutes = (t) => { const [h,m] = t.split(':').map(Number); return h*
 const fmtTimeShort = (t) => {
   const [h,m] = t.split(':').map(Number);
   return `${h%12||12}:${String(m).padStart(2,'0')}`;
-};
-
-const getPlayoffOverride = (matches, parentId) => {
-  for (let setNum = 1; setNum <= 3; setNum++) {
-    const sibling = matches[`${parentId}_s${setNum}`];
-    if (sibling && (sibling.override_p1 || sibling.override_p2)) {
-      return { p1: sibling.override_p1 || null, p2: sibling.override_p2 || null };
-    }
-  }
-  return null;
-};
-
-const normalizeName = (s) => s.replace(/\s+/g, '').toLowerCase();
-const teamPrefix = (s) => normalizeName(s.split('-')[0].trim());
-const namesMatch = (groupPlayer, schedulePlayer) => {
-  const a = normalizeName(groupPlayer);
-  const b = normalizeName(schedulePlayer);
-  if (a === b) return true;
-  if (teamPrefix(groupPlayer) === b) return true;
-  if (a === teamPrefix(schedulePlayer)) return true;
-  const aliased = NAME_ALIASES[schedulePlayer];
-  if (aliased && normalizeName(aliased) === a) return true;
-  return false;
-};
-
-const arePrelimsComplete = (cat, matches) => {
-  const prelims = SCHEDULE.filter(m => !m.isPlayoff && m.cat === cat);
-  if (prelims.length === 0) return true;
-  return prelims.every(m => !!matches[m.id]?.is_final);
-};
-
-// Head-to-head result between two entrants in a category's prelims.
-const headToHead = (cat, nameA, nameB, matches) => {
-  for (const m of SCHEDULE) {
-    if (m.isPlayoff || m.cat !== cat) continue;
-    const aIsP1 = namesMatch(nameA, m.p1), aIsP2 = namesMatch(nameA, m.p2);
-    const bIsP1 = namesMatch(nameB, m.p1), bIsP2 = namesMatch(nameB, m.p2);
-    if (!((aIsP1 && bIsP2) || (aIsP2 && bIsP1))) continue;
-    const row = matches[m.id];
-    if (!row?.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return 0;
-    const aScore = aIsP1 ? row.score1 : row.score2;
-    const bScore = aIsP1 ? row.score2 : row.score1;
-    return aScore > bScore ? 1 : -1;
-  }
-  return 0;
-};
-
-const calculateStandings = (matches) => {
-  const st = {};
-  Object.entries(GROUPS).forEach(([cat, groups]) => {
-    st[cat] = {};
-    Object.entries(groups).forEach(([g, players]) => {
-      st[cat][g] = players.map(p => ({ name: p, played: 0, won: 0, lost: 0, pointsFor: 0, pointsAgainst: 0 }));
-    });
-  });
-  SCHEDULE.forEach(match => {
-    if (match.isPlayoff) return;
-    const row = matches[match.id];
-    if (!row || !row.is_final) return;
-    const s1 = row.score1, s2 = row.score2;
-    const groups = GROUPS[match.cat] || {};
-    for (const [gName, players] of Object.entries(groups)) {
-      const i1 = players.findIndex(p => namesMatch(p, match.p1));
-      const i2 = players.findIndex(p => namesMatch(p, match.p2));
-      if (i1 >= 0 && i2 >= 0) {
-        const e1 = st[match.cat][gName][i1], e2 = st[match.cat][gName][i2];
-        e1.played++; e2.played++;
-        e1.pointsFor += s1; e1.pointsAgainst += s2;
-        e2.pointsFor += s2; e2.pointsAgainst += s1;
-        if (s1 > s2) { e1.won++; e2.lost++; } else if (s2 > s1) { e2.won++; e1.lost++; }
-        break;
-      }
-    }
-  });
-  // Rank by wins; 2-way tie -> head-to-head, 3-way -> point differential.
-  const byDiff = (a, b) => (b.pointsFor - b.pointsAgainst) - (a.pointsFor - a.pointsAgainst);
-  Object.entries(st).forEach(([cat, groups]) => Object.entries(groups).forEach(([gName, g]) => {
-    g.sort((a, b) => b.won - a.won);
-    const ordered = [];
-    let i = 0;
-    while (i < g.length) {
-      let j = i;
-      while (j < g.length && g[j].won === g[i].won) j++;
-      const tier = g.slice(i, j);
-      if (tier.length === 2) {
-        const h = headToHead(cat, tier[0].name, tier[1].name, matches);
-        if (h < 0) tier.reverse();
-        else if (h === 0) tier.sort(byDiff);
-      } else if (tier.length > 2) {
-        tier.sort((a, b) => byDiff(a, b) || -headToHead(cat, a.name, b.name, matches));
-      }
-      ordered.push(...tier);
-      i = j;
-    }
-    groups[gName] = ordered;
-  }));
-  return st;
-};
-
-const resolveSemiSlot = (standings, slotInfo, cat) => {
-  if (!slotInfo || !standings[cat]) return null;
-  const g = standings[cat][slotInfo.group];
-  if (!g || g.length < slotInfo.rank) return null;
-  const entry = g[slotInfo.rank - 1];
-  return entry && entry.played > 0 ? entry.name : null;
-};
-const resolveSemiSlotAll = (standings, slotInfo, cat, matches) => {
-  if (!slotInfo || !standings[cat]) return null;
-  const groupStandings = standings[cat][slotInfo.group];
-  if (!groupStandings || groupStandings.length < slotInfo.rank) return null;
-  const target = groupStandings[slotInfo.rank - 1];
-  if (!target || target.played === 0) return null;
-  const targetWon = target.won;
-  const targetDiff = target.pointsFor - target.pointsAgainst;
-  const tied = groupStandings.filter(e => {
-    if (e.played === 0) return false;
-    return e.won === targetWon && (e.pointsFor - e.pointsAgainst) === targetDiff;
-  });
-  // 2-way tie decided by head-to-head (the sort already ordered them)
-  if (tied.length === 2 && matches && headToHead(cat, tied[0].name, tied[1].name, matches) !== 0) {
-    return { names: [target.name], tied: false };
-  }
-  return { names: tied.map(e => e.name), tied: tied.length > 1 };
-};
-
-// ---- knockout bracket (single-game matches, winner-of feeds) ----
-const resolveKnockoutSlot = (slot, cat, standings, matches) => {
-  if (!slot) return null;
-  if (slot.group) {
-    if (!arePrelimsComplete(cat, matches)) return null;
-    return resolveSemiSlotAll(standings, slot, cat, matches);
-  }
-  if (slot.winnerOf) {
-    const w = getKnockoutWinner(matches, slot.winnerOf, standings);
-    return w ? { names: [w], tied: false } : null;
-  }
-  return null;
-};
-
-const knockoutSetWins = (matches, id) => {
-  let t1 = 0, t2 = 0;
-  for (let s = 1; s <= 3; s++) {
-    const row = matches[`${id}_s${s}`];
-    if (row?.is_final && row.score1 != null && row.score2 != null) {
-      if (row.score1 > row.score2) t1++;
-      else if (row.score2 > row.score1) t2++;
-    }
-  }
-  return [t1, t2];
-};
-
-const getKnockoutWinner = (matches, id, standings) => {
-  const k = KNOCKOUT[id];
-  if (!k) return null;
-  const s1 = resolveKnockoutSlot(k.slot1, k.cat, standings, matches);
-  const s2 = resolveKnockoutSlot(k.slot2, k.cat, standings, matches);
-  if (!s1 || s1.tied || !s2 || s2.tied) return null;
-  if (k.sets === 3) {
-    const [t1, t2] = knockoutSetWins(matches, id);
-    if (t1 >= 2) return s1.names[0];
-    if (t2 >= 2) return s2.names[0];
-    return null;
-  }
-  const row = matches[id];
-  if (!row || !row.is_final || row.score1 == null || row.score2 == null || row.score1 === row.score2) return null;
-  return row.score1 > row.score2 ? s1.names[0] : s2.names[0];
-};
-
-const getSemiWinner = (matches, semiId, standings) => {
-  const structure = PLAYOFF_STRUCTURE[semiId];
-  if (!structure) return null;
-  const override = getPlayoffOverride(matches, semiId);
-  let team1 = override ? override.p1 : null;
-  let team2 = override ? override.p2 : null;
-  if ((!team1 || !team2) && !arePrelimsComplete(structure.cat, matches)) return null;
-  if (!team1) team1 = resolveSemiSlot(standings, structure.slot1, structure.cat);
-  if (!team2) team2 = resolveSemiSlot(standings, structure.slot2, structure.cat);
-  if (!team1 || !team2) return null;
-  let t1 = 0, t2 = 0;
-  for (let s = 1; s <= 3; s++) {
-    const row = matches[`${semiId}_s${s}`];
-    if (row && row.is_final && row.score1 != null && row.score2 != null) {
-      if (row.score1 > row.score2) t1++;
-      else if (row.score2 > row.score1) t2++;
-    }
-  }
-  if (t1 >= 2) return team1;
-  if (t2 >= 2) return team2;
-  return null;
 };
 
 const resolvePlayoffNames = (match, standings, matches) => {
@@ -256,16 +72,6 @@ const resolvePlayoffNames = (match, standings, matches) => {
     };
   }
   return { p1: match.p1, p2: match.p2, p1Tied: false, p2Tied: false };
-};
-
-const advanceCountForGroup = (cat, groupName) => {
-  let count = 0;
-  for (const v of Object.values(PLAYOFF_STRUCTURE)) {
-    if (v.cat !== cat) continue;
-    if (v.slot1?.group === groupName) count = Math.max(count, v.slot1.rank);
-    if (v.slot2?.group === groupName) count = Math.max(count, v.slot2.rank);
-  }
-  return count || ADVANCE_PER_GROUP[cat] || 1;
 };
 
 const isActive = (row, now) => {
@@ -343,6 +149,11 @@ const CourtCard = ({ courtNum, match, row, p1Name, p2Name, live, p1Tied, p2Tied 
           {match.matchType === 'final' && (
             <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-red-100 text-red-800">
               FINAL{match.setNumber ? ` S${match.setNumber}` : ''}
+            </span>
+          )}
+          {match.matchType === 'third' && (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-lime-100 text-lime-800">
+              3RD{match.setNumber ? ` S${match.setNumber}` : ''}
             </span>
           )}
         </div>
@@ -480,9 +291,9 @@ const CategoryColumn = ({ cat, standings, matches }) => {
 
       {knockoutEntries.length > 0 && (
         <div className="px-2.5 py-1.5 border-t border-gray-200 bg-gray-50">
-          <div className="text-[10px] font-bold tracking-widest text-gray-400 mb-0.5">KNOCKOUT · SF & FINAL BEST OF 3</div>
-          <div className="grid gap-x-4" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-            {[['r16', 'ROUND OF 16'], ['quarter', 'QUARTERFINALS'], ['semi', 'SEMIFINALS'], ['final', 'FINAL']].map(([rk, rTitle]) => {
+          <div className="text-[10px] font-bold tracking-widest text-gray-400 mb-0.5">KNOCKOUT · SF, FINAL & 3RD BEST OF 3</div>
+          <div className="grid gap-x-4" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+            {[['r16', 'ROUND OF 16'], ['quarter', 'QUARTERFINALS'], ['semi', 'SEMIFINALS'], ['final', 'FINAL'], ['third', '3RD PLACE']].map(([rk, rTitle]) => {
               const rEntries = knockoutEntries.filter(([_, k]) => k.round === rk);
               if (rEntries.length === 0) return null;
               return (
